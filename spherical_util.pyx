@@ -10,8 +10,6 @@ cdef extern from "spherical_util.h":
     void density_cont_val(double* reorthog,double *imorthog,double *x,double*y,double*z,double*kx,double*ky,double*kz,int nx,int ny,int nz,int nk,double* dens_val)
     void build_transition_density_matrix(int n_states_neut,int n_closed,int n_occ,int ci_size_neut,int n_elec_neut,double *ci_vector,int *mos_vector,int* spin_vector,double *tran_den_mat_mo)
 
-def pbuild_transition_density_matrix(i,l,m,x,y,np.ndarray[double, ndim=1,mode="c"] civec,np.ndarray[double, ndim=1,mode="c"] mos_vec,np.ndarray[double, ndim=1,mode="c"]spin_vec,np.ndarray[double, ndim=1,mode="c"] tdmmo):
-    build_transition_density_matrix(i,l,m,x,y,&civec[0],&mos_vec[0],&spin_vec[0],&tdmmo[0])
 
 def pspher_harmo(np.ndarray[double, ndim=1,mode="c"] thet,np.ndarray[double, ndim=1,mode="c"] phi,np.ndarray[ int, ndim=1,mode="c"] l,np.ndarray[int, ndim=1,mode="c"] ml,np.ndarray[double, ndim=1,mode="c"] result):
 
@@ -40,3 +38,5 @@ def pdensity_cont_val(np.ndarray[double, ndim=1,mode="c"] reorthog,np.ndarray[do
 
     return 0
 
+def pbuild_transition_density_matrix(i,l,m,x,y,np.ndarray[double, ndim=1,mode="c"] civec,np.ndarray[int, ndim=1,mode="c"] mos_vec,np.ndarray[int, ndim=1,mode="c"]spin_vec,np.ndarray[double, ndim=1,mode="c"] tdmmo):
+    build_transition_density_matrix(i,l,m,x,y,&civec[0],&mos_vec[0],&spin_vec[0],&tdmmo[0])

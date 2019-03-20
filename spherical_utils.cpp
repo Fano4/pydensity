@@ -141,29 +141,34 @@ void density_cont_val(double* reorthog,double* imorthog,double *x,double*y,doubl
 void build_transition_density_matrix(int n_states_neut,int n_closed,int n_occ,int ci_size_neut,int n_elec_neut,double *ci_vector,int *mos_vector,int* spin_vector,double *tran_den_mat_mo)
 {
 
-   bool test(0);
-   bool test2(0);
-   bool test3(0);
-   int q(0);
-   int p(0);
-   double sum(0);
+   bool test=0;
+   bool test2=0;
+   bool test3=0;
+   int q=0;
+   int p=0;
+   double sum=0;
    double det_val;
+   int i=0;
+   int j=0;
+   int k=0;
+   int kp=0;
+   int m=0;
+   int n=0;
 
-    for (int i=0; i!=n_states_neut; i++)//ELECTRONIC STATE N
+    for (i=0; i!=n_states_neut; i++)//ELECTRONIC STATE N
     {
-        for (int j=0; j!=n_states_neut; j++)//ELECTRONIC STATE K
+        for (j=0; j!=n_states_neut; j++)//ELECTRONIC STATE K
         {
-           std::cout<<" density between states "<<i<<" and "<<j<<std::endl;
            sum=0;
-         for(int k=0;k!=(n_closed+n_occ);k++)
+         for(k=0;k!=(n_closed+n_occ);k++)
          {
-            for(int kp=0;kp!=n_closed+n_occ;kp++)
+            for(kp=0;kp!=n_closed+n_occ;kp++)
             {
                //tran_den_mat_mo[n_states_neut*i+j][(n_occ+n_closed)*k+kp] = 0;
                tran_den_mat_mo[i*n_states_neut*(n_occ+n_closed)*(n_occ+n_closed)+j*(n_occ+n_closed)*(n_occ+n_closed)+k*(n_occ+n_closed)+kp] = 0;
-               for(int m=0;m!=ci_size_neut;m++)
+               for(m=0;m!=ci_size_neut;m++)
                {
-                  for(int n=0;n!=ci_size_neut;n++)
+                  for(n=0;n!=ci_size_neut;n++)
                   {
 
                      det_val=build_reduced_determinant(k,kp,n_elec_neut,n_closed,n_occ,&mos_vector[m*n_elec_neut],&mos_vector[n_elec_neut*n],&spin_vector[n_elec_neut*m],&spin_vector[n_elec_neut*n]);
@@ -185,31 +190,34 @@ void build_transition_density_matrix(int n_states_neut,int n_closed,int n_occ,in
     }
 }
 
-double build_reduced_determinant( int ai,int aj,int n_elec,int n_closed,int n_occ,double* mo_vector_1,double* mo_vector_2,double *spin_vector_1,double *spin_vector_2)
+double build_reduced_determinant( int ai,int aj,int n_elec,int n_closed,int n_occ,int* mo_vector_1,int* mo_vector_2,int *spin_vector_1,int *spin_vector_2)
 {
    /* Given the vectors containing the mo labels and the spin labels of the electrons, this routine builds a slater determinant from which one electron contained in the mo's i and j have been removed   !!!! ONLY FOR SINGLET AND SIMPLE EXCITATION
    */
 
-   bool test2(0);
-   bool test3(0);
-   int spin(0);
-   double temp(0);
+   bool test2=0;
+   bool test3=0;
+   int spin=0;
+   double temp=0;
+   int k=0;
+   int e=0;
+   double prefactor=1;
+
 
    int new_vector_1[(n_occ+n_closed)];
    int new_vector_2[(n_occ+n_closed)];
 
-   double prefactor(1);
 
-   for(int k=0;k!=(n_occ+n_closed);k++)
+   for( k=0;k!=(n_occ+n_closed);k++)
    {
       new_vector_1[k]=0;
       new_vector_2[k]=0;
    }
 
-   for(int e=0;e!=n_elec;e++)
+   for( e=0;e!=n_elec;e++)
    {
-      new_vector_1[int(mo_vector_1[e])]+=1;
-      new_vector_2[int(mo_vector_2[e])]+=1;
+      new_vector_1[(mo_vector_1[e])]+=1;
+      new_vector_2[(mo_vector_2[e])]+=1;
    }
    /*
    std::cout<<"Taking electron from orbitals "<<ai<<","<<aj<<std::endl;
@@ -223,11 +231,15 @@ double build_reduced_determinant( int ai,int aj,int n_elec,int n_closed,int n_oc
       std::cout<<new_vector_2[k]<<" ";
    }std::cout<<std::endl;
    */
-   prefactor=sqrt(double(new_vector_1[ai]))*sqrt(double(new_vector_2[aj]));
+   temp=(new_vector_1[ai]);
+   prefactor=sqrt(temp);
+   temp=(new_vector_2[aj]);
+   prefactor*=sqrt(temp);
+//   prefactor=sqrt(double(new_vector_1[ai]))*sqrt(double(new_vector_2[aj]));
    new_vector_1[ai]--;
    new_vector_2[aj]--;
 
-   for(int k=0;k!=(n_occ+n_closed);k++)
+   for( k=0;k!=(n_occ+n_closed);k++)
    {
 //      std::cout<<new_vector_1[k]<<std::endl;
       if(new_vector_1[k]!=new_vector_2[k])
