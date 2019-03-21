@@ -8,8 +8,6 @@ import h5py as h5
 import spherical_util as spher
 import fortranformat as ff
 
-
-
 def mo_value(r,t,f,mo_index,nucl_index,nucl_coord,bas_fun_type,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array,angular):
 
     val=0
@@ -52,9 +50,11 @@ def cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,filename,data,array_val):
     file.close()
 
 
-def main():
+def main(MO_index, spin_state):
     fn = '/home/alessio/config/Stephan/zNorbornadiene_P005-000_P020-000_P124-190.rasscf.h5'
     import quantumpropagator as qp
+
+    ci_coefficients = all_things['CI_VECTORS'].flatten() # I need this vector flattened
 
     # PARSE THINGS
     all_things = qp.readWholeH5toDict(fn)
@@ -79,9 +79,56 @@ def main():
     # we might be able to compute this
     # tran_den_mat =
 
+def string_active_space_transformer(fn, inactive):
+    '''
+    from a grepped molcas file to the right vector
+    fn :: filepath <- file with a list of  in the right order 222ud000
+    '''
+    with open(fn,'r') as f:
+        content = f.readlines()
+
+    inactive_string = '2'*inactive
+    strings = [ inactive_string + x.replace('\n','') for x in content if x != '\n' ]
+
+    print('\n\nThis file contains {} cases\n\n'.format(len(strings)))
+    a = [ from_string_to_vector(x) for x in strings ]
+    MO_index = []
+    spin_state = []
+    for x in strings:
+        MO, spin = from_string_to_vector(x)
+        MO_index = MO_index + MO
+        spin_state = spin_state + spin
+    MO_index_out = np.array(MO_index) + 1 # starts at 1
+    spin_state_out = np.array(spin_state)
+    return (MO_index_out,spin_state_out)
+
+def from_string_to_vector(strin):
+    '''
+    from a string of occupation it get the two vectors MO_index and spin_state
+    strin :: String <- '22222222222222222222222u000d002'
+    '''
+    MO_index = []
+    spin_state = []
+    for a,i in enumerate(strin): # for each character of this string
+        if i == '2':
+            MO_index.append(a)
+            spin_state.append(0)
+            MO_index.append(a)
+            spin_state.append(1)
+        elif i == 'u':
+            MO_index.append(a)
+            spin_state.append(0)
+        elif i == 'd':
+            MO_index.append(a)
+            spin_state.append(1)
+    return(MO_index,spin_state)
+
 
 if __name__ == "__main__" :
-    main()
+    fn = '/home/alessio/config/Stephan/up_down'
+    inactive = 23 # the inactive orbitals
+    MO_index, spin_state = string_active_space_transformer(fn,inactive)
+    main(MO_index, spin_state)
 
 
 def ohter():
