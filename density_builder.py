@@ -73,8 +73,8 @@ def main(MO_index, spin_state):
     # cont_zeta =
     # cont_coeff =
 
-    # lcao_coeff_array =
-    # lcao_num_array =
+    lcao_coeff_array = all_things['MO_VECTORS']
+    lcao_num_array = all_things['MO_VECTORS'].size
 
     # we might be able to compute this
     # tran_den_mat =
