@@ -51,7 +51,11 @@ def cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,filename,data,array_val):
 
 
 def main(MO_index, spin_state):
+
+    #H5 LOCATION ON SASHA GREY
     fn = '/home/alessio/config/Stephan/zNorbornadiene_P005-000_P020-000_P124-190.rasscf.h5'
+
+
     import quantumpropagator as qp
 
     ci_coefficients = all_things['CI_VECTORS'].flatten() # I need this vector flattened
@@ -130,6 +134,73 @@ if __name__ == "__main__" :
     MO_index, spin_state = string_active_space_transformer(fn,inactive)
     main(MO_index, spin_state)
 
+def Molcas_to_Wavepack(molcas_h5file):
+    '''
+    This is intended to convert Molcas generated hdf5 file data (rasscf) to the format used by pydensity.
+    argument: h5 file object
+    returns the set of data arrays
+    '''
+    ci_coefficients = molcas_h5file['CI_VECTORS'].flatten() # I need this vector flattened
+
+    # PARSE THINGS
+
+    MO_OCCUPATIONS = molcas_h5file['MO_OCCUPATIONS']
+
+
+    n_mo = MO_OCCUPATIONS[np.nonzero(MO_OCCUPATIONS)].size
+    nucl_index = molcas_h5file['BASIS_FUNCTION_IDS'][:,0] # THIS NEEDS TO BE np.array([])
+    nucl_coord = molcas_h5file['CENTER_COORDINATES'] # THIS NEEDS TO BE np.array([])
+    bas_fun_type = molcas_h5file['BASIS_FUNCTION_IDS'][:,1:3] # THIS NEEDS TO BE np.array([])
+    n_states_neut = molcas_h5file['ROOT_ENERGIES'].size # this is ok
+
+    '''
+    We want to evaluate the contraction numbers for every basis function. 
+    each basis function is described by CENTER - SHELL - L - ML
+    for each of them, the number of contractions is given by the number 
+    of corresponding primitives with the same CENTER - SHELL - L
+
+    we just need then to compute this number
+
+    '''
+    cont_num=np.zeros(molcas_h5file['BASIS_FUNCTION_IDS']).shape[0])
+
+    for i in np.arange(0,np.asarray(molcas_h5file['BASIS_FUNCTION_IDS']).shape[0]):
+            for j in np.arange(0,np.asarray(molcas_h5file['PRIMITIVE_IDS']).shape[0] ):
+                if( molcas_h5file['BASIS_FUNCTION_IDS'][i][0] == molcas_h5file['PRIMITIVE_IDS'][j][0] and molcas_h5file['BASIS_FUNCTION_IDS'][i][1] == molcas_h5file['PRIMITIVE_IDS'][j][1] and molcas_h5file['BASIS_FUNCTION_IDS'][i][2] == molcas_h5file['PRIMITIVE_IDS'][j][2]):
+                    cont_num[i]++
+    '''
+    The maximum contraction number gives us the size of dimension 1 for the arrays cont_zeta and cont_coeff
+    '''
+    cont_zeta=np.empty(molcas_h5file['BASIS_FUNCTION_IDS']).shape[0],cont_num.max())
+    cont_coeff=np.empty(molcas_h5file['BASIS_FUNCTION_IDS']).shape[0],cont_num.max())
+    cont_zeta[:]=np.nan
+    cont_coeff[:]=np.nan
+
+    '''
+    We need to fill cont_zeta and cont_coeff now. These numbers are given, for every contraction in the PRIMITIVES array.
+    The difficulty is that we should fill the arrays with the values resptective to the corresponding primitive.
+    We assume that the primitives are used in the same order as they are called in the BASIS_FUNCTION_IDS array
+    '''
+    tot=0
+    for i in np.arange(0,molcas_h5file['BASIS_FUNCTION_IDS']).shape[0]):
+        for j in np.arange(0,cont_num[i])
+        cont_zeta[i,j]=molcas_h5file['PRIMITIVES'][tot][0]
+        cont_num[i,j]=molcas_h5file['PRIMITIVES'][tot][1]
+        tot++
+
+    lcao_num_array = molcas_h5file['MO_VECTORS'].size
+    lcao_coeff_array = molcas_h5file['MO_VECTORS']
+
+
+    '''
+    Now we need to compute the transition density matrix. transition density matrix requires the ci vector,
+    the array containing the occupied mos and the spin state vector.
+    '''
+
+    data.close()
+    # we might be able to compute this
+    # tran_den_mat =
+    
 
 def ohter():
     '''

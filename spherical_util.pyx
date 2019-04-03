@@ -40,3 +40,4 @@ def pdensity_cont_val(np.ndarray[double, ndim=1,mode="c"] reorthog,np.ndarray[do
 
 def pbuild_transition_density_matrix(i,l,m,x,y,np.ndarray[double, ndim=1,mode="c"] civec,np.ndarray[int, ndim=1,mode="c"] mos_vec,np.ndarray[int, ndim=1,mode="c"]spin_vec,np.ndarray[double, ndim=1,mode="c"] tdmmo):
     build_transition_density_matrix(i,l,m,x,y,&civec[0],&mos_vec[0],&spin_vec[0],&tdmmo[0])
+
