@@ -1,3 +1,4 @@
+#include "spherical_util.h"
 double factorial(int n)
 {
    if(n <= 1 && n >= 0 )
@@ -8,6 +9,7 @@ double factorial(int n)
    {
       exit(EXIT_FAILURE);
    }
+   return 0;
 }
 double associated_legendre(int l,int m,double x)
 {
@@ -140,13 +142,8 @@ void density_cont_val(double* reorthog,double* imorthog,double *x,double*y,doubl
 
 void build_transition_density_matrix(int n_states_neut,int n_closed,int n_occ,int ci_size_neut,int n_elec_neut,double *ci_vector,int *mos_vector,int* spin_vector,double *tran_den_mat_mo)
 {
+   using namespace std;
 
-   bool test=0;
-   bool test2=0;
-   bool test3=0;
-   int q=0;
-   int p=0;
-   double sum=0;
    double det_val;
    int i=0;
    int j=0;
@@ -157,26 +154,33 @@ void build_transition_density_matrix(int n_states_neut,int n_closed,int n_occ,in
 
     for (i=0; i!=n_states_neut; i++)//ELECTRONIC STATE N
     {
-        for (j=0; j!=n_states_neut; j++)//ELECTRONIC STATE K
-        {
-           sum=0;
+      for (j=i; j!=n_states_neut; j++)//ELECTRONIC STATE K
+      {
          for(k=0;k!=(n_closed+n_occ);k++)
          {
             for(kp=0;kp!=n_closed+n_occ;kp++)
             {
                //tran_den_mat_mo[n_states_neut*i+j][(n_occ+n_closed)*k+kp] = 0;
                tran_den_mat_mo[i*n_states_neut*(n_occ+n_closed)*(n_occ+n_closed)+j*(n_occ+n_closed)*(n_occ+n_closed)+k*(n_occ+n_closed)+kp] = 0;
+               cout<<"states "<<i<<"-"<<j<<" ; MO "<<k<<"-"<<kp<<"\n";
                for(m=0;m!=ci_size_neut;m++)
                {
-                  for(n=0;n!=ci_size_neut;n++)
+                  for(n=m;n!=ci_size_neut;n++)
                   {
 
                      det_val=build_reduced_determinant(k,kp,n_elec_neut,n_closed,n_occ,&mos_vector[m*n_elec_neut],&mos_vector[n_elec_neut*n],&spin_vector[n_elec_neut*m],&spin_vector[n_elec_neut*n]);
 
-                     //tran_den_mat_mo[i*n_states_neut+j][k*(n_occ+n_closed)+kp]+=ci_vec_neut[0][(n_elec_neut+n_states_neut)*(m)+n_elec_neut+i]*ci_vec_neut[0][(n_elec_neut+n_states_neut)*(n)+n_elec_neut+j]*det_val;
-                     tran_den_mat_mo[i*n_states_neut*(n_occ+n_closed)*(n_occ+n_closed)+j*(n_occ+n_closed)*(n_occ+n_closed)+k*(n_occ+n_closed)+kp]+=ci_vector[n_states_neut*m+i]*ci_vector[n_states_neut*n+j]*det_val;
+//                     std::cout<<"det "<<m<<" - "<<n<<" => "<<det_val<<std::endl;
+                     if(m==n)
+                         tran_den_mat_mo[i*n_states_neut*(n_occ+n_closed)*(n_occ+n_closed)+j*(n_occ+n_closed)*(n_occ+n_closed)+k*(n_occ+n_closed)+kp]+=ci_vector[n_states_neut*m+i]*ci_vector[n_states_neut*n+j]*det_val;
+                     else
+                     {
+                         tran_den_mat_mo[i*n_states_neut*(n_occ+n_closed)*(n_occ+n_closed)+j*(n_occ+n_closed)*(n_occ+n_closed)+k*(n_occ+n_closed)+kp]+=ci_vector[n_states_neut*m+i]*ci_vector[n_states_neut*n+j]*det_val;
+                     }
+
                    }
                  }
+                 tran_den_mat_mo[j*n_states_neut*(n_occ+n_closed)*(n_occ+n_closed)+i*(n_occ+n_closed)*(n_occ+n_closed)+k*(n_occ+n_closed)+kp]=tran_den_mat_mo[i*n_states_neut*(n_occ+n_closed)*(n_occ+n_closed)+j*(n_occ+n_closed)*(n_occ+n_closed)+kp*(n_occ+n_closed)+k];
 //               if(k==kp)
 //               {
 //                 sum+=tran_den_mat_mo[i*n_states_neut*(n_occ+n_closed)*(n_occ+n_closed)+j*(n_occ+n_closed)*(n_occ+n_closed)+k*(n_occ+n_closed)+kp];
@@ -195,15 +199,22 @@ double build_reduced_determinant( int ai,int aj,int n_elec,int n_closed,int n_oc
    /* Given the vectors containing the mo labels and the spin labels of the electrons, this routine builds a slater determinant from which one electron contained in the mo's i and j have been removed   !!!! ONLY FOR SINGLET AND SIMPLE EXCITATION
    */
 
-   bool test2=0;
-   bool test3=0;
-   int spin=0;
    double temp=0;
    int k=0;
    int e=0;
    double prefactor=1;
+/*
+   std::cout<<"Occupied MO's: "<<std::endl;
+   for(int k=0;k!=(n_occ+n_closed);k++)
+   {
+      std::cout<<mo_vector_1[k]<<" ";
+   }std::cout<<std::endl;
 
-
+   for(int k=0;k!=(n_occ+n_closed);k++)
+   {
+      std::cout<<mo_vector_2[k]<<" ";
+   }std::cout<<std::endl;
+*/
    int new_vector_1[(n_occ+n_closed)];
    int new_vector_2[(n_occ+n_closed)];
 
@@ -219,7 +230,7 @@ double build_reduced_determinant( int ai,int aj,int n_elec,int n_closed,int n_oc
       new_vector_1[(mo_vector_1[e])]+=1;
       new_vector_2[(mo_vector_2[e])]+=1;
    }
-   /*
+/*   
    std::cout<<"Taking electron from orbitals "<<ai<<","<<aj<<std::endl;
    for(int k=0;k!=(n_occ+n_closed);k++)
    {
@@ -230,7 +241,7 @@ double build_reduced_determinant( int ai,int aj,int n_elec,int n_closed,int n_oc
    {
       std::cout<<new_vector_2[k]<<" ";
    }std::cout<<std::endl;
-   */
+  */ 
    temp=(new_vector_1[ai]);
    prefactor=sqrt(temp);
    temp=(new_vector_2[aj]);
@@ -246,7 +257,7 @@ double build_reduced_determinant( int ai,int aj,int n_elec,int n_closed,int n_oc
          return 0;
    }
 
-  // if(prefactor != 0 )
-  //    std::cout<<prefactor<<std::endl;
+//   if(prefactor != 0 )
+//      std::cout<<prefactor<<std::endl;
    return prefactor;
 }

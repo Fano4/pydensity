@@ -1,3 +1,5 @@
+# distutils: language = c++
+# distutils: sources = spherical_utils.cpp
 
 cimport numpy as np
 

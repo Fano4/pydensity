@@ -102,7 +102,7 @@ def string_active_space_transformer(fn, inactive):
         MO, spin = from_string_to_vector(x)
         MO_index = MO_index + MO
         spin_state = spin_state + spin
-    MO_index_out = np.array(MO_index,dtype=np.int32) + 1 # starts at 1
+    MO_index_out = np.array(MO_index,dtype=np.int32) 
     spin_state_out = np.array(spin_state,dtype=np.int32)
     return (MO_index_out,spin_state_out)
 
@@ -135,19 +135,23 @@ def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive):
     argument: h5 file object
     returns the set of data arrays
     '''
+    print("Getting CI vectors data")
     _ , ci_length = molcas_h5file['CI_VECTORS'].shape
-    ci_coefficients = np.asarray(molcas_h5file['CI_VECTORS']).flatten() # I need this vector flattened
+    ci_coefficients = np.asarray(molcas_h5file['CI_VECTORS']).swapaxes(0,1).flatten() # I need this vector flattened
     MO_index, spin_state = string_active_space_transformer(up_down_file, inactive)
 
     # PARSE THINGS
+    print("Getting MO Occupation and electron data")
 
     MO_OCCUPATIONS = np.asarray(molcas_h5file['MO_OCCUPATIONS'])
     n_electrons = int(sum(MO_OCCUPATIONS))
 
 
     n_mo = MO_OCCUPATIONS[np.nonzero(MO_OCCUPATIONS)].size
+    print("Getting nuclear data")
     nucl_index = molcas_h5file['BASIS_FUNCTION_IDS'][:,0] # THIS NEEDS TO BE np.array([])
     nucl_coord = molcas_h5file['CENTER_COORDINATES'] # THIS NEEDS TO BE np.array([])
+    print("Getting spherical harmonics data")
     bas_fun_type = molcas_h5file['BASIS_FUNCTION_IDS'][:,1:3] # THIS NEEDS TO BE np.array([])
     n_states_neut = molcas_h5file['ROOT_ENERGIES'].size # this is ok
 
@@ -157,7 +161,8 @@ def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive):
     '''
     n_active = n_mo - inactive
 
-    tran_den_mat = np.zeros(n_mo*n_mo)
+    tran_den_mat = np.zeros(n_mo*n_mo*n_states_neut*n_states_neut)
+    print("Entering TDM: building routine")
 
     spher.pbuild_transition_density_matrix(
             n_states_neut,
@@ -170,6 +175,10 @@ def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive):
             spin_state,
             tran_den_mat
             )
+
+    print("TDM Built!")
+
+    np.save("testing_tdm",tran_den_mat)
     '''
     We want to evaluate the contraction numbers for every basis function.
     each basis function is described by CENTER - SHELL - L - ML
@@ -302,11 +311,12 @@ def ohter():
 
 
 if __name__ == "__main__" :
-    fn = '/home/alessio/config/Stephan/up_down' # ON SASHA GREY
-    #fn = '/Users/stephan/dox/Acu-Stephan/up_down' # ON STEPH MACBOOK
+    #fn = '/home/alessio/config/Stephan/up_down' # ON SASHA GREY
+    fn = '/Users/stephan/dox/Acu-Stephan/up_down' # ON STEPH MACBOOK
     inactive = 23 # the inactive orbitals
-    #molcas_h5file = h5.File('/Users/stephan/dox/Acu-Stephan/zNorbornadiene_P005-000_P020-000_P124-190.rasscf.h5','r') # ON STEPH MACBOOK
-    molcas_h5file = h5.File('/home/alessio/config/Stephan/zNorbornadiene_P005-000_P020-000_P124-190.rasscf.h5','r') # ON SASHA
+    molcas_h5file = h5.File('/Users/stephan/dox/Acu-Stephan/zNorbornadiene_P005-000_P020-000_P124-190.rasscf.h5','r') # ON STEPH MACBOOK
+    #molcas_h5file = h5.File('/home/alessio/config/Stephan/zNorbornadiene_P005-000_P020-000_P124-190.rasscf.h5','r') # ON SASHA
+    print("Entering Molcas To Wavepack Routine")
     Molcas_to_Wavepack(molcas_h5file,fn,inactive)
     molcas_h5file.close()
 
