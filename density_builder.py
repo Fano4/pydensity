@@ -217,8 +217,7 @@ def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive):
     lcao_num_array = molcas_h5file['MO_VECTORS'].size
     lcao_coeff_array = molcas_h5file['MO_VECTORS']
 
-
-    # pbuild_transition_density_matrix(i,l,m,x,y,np.ndarray[double, ndim=1,mode="c"] civec,np.ndarray[int, ndim=1,mode="c"] mos_vec,np.ndarray[int, ndim=1,mode="c"]spin_vec,np.ndarray[double, ndim=1,mode="c"] tdmmo)
+    return n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array
 
 def ohter():
     '''
@@ -317,6 +316,77 @@ if __name__ == "__main__" :
     molcas_h5file = h5.File('/Users/stephan/dox/Acu-Stephan/zNorbornadiene_P005-000_P020-000_P124-190.rasscf.h5','r') # ON STEPH MACBOOK
     #molcas_h5file = h5.File('/home/alessio/config/Stephan/zNorbornadiene_P005-000_P020-000_P124-190.rasscf.h5','r') # ON SASHA
     print("Entering Molcas To Wavepack Routine")
-    Molcas_to_Wavepack(molcas_h5file,fn,inactive)
+    n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array=Molcas_to_Wavepack(molcas_h5file,fn,inactive)
     molcas_h5file.close()
+    print("Molcas To Wavepack Routine Done!")
+
+    #WVPCK_DATA REPRESENT THE AMPLITUDE ON THE ELECTRONIC STATES FOR THE CONSIDERED TIME. IT IS AN ARRAY WITH SIZE NES IS SINGLE POINT, AND A MATRIX WITH SIZE NES X NGEOM IF GEOMETRY DEPENDENT
+
+    wvpck_data=np.zeros(nes)
+    wvpck_data[0]=1;
+    
+    #TDM IS THE TRANSITION DENSITY MATRIX IN THE BASIS OF MO'S, AVERAGRED OVER THE POPULATIONS IN THE EXCITED STATES.
+    tdm=np.zeros((n_mo,n_mo))
+
+    for ies in np.arange(0,nes):
+        tdm=tdm+abs(wvpck_data[ies])**2*tran_den_mat[ir][(ies)*n_states_neut+(ies)].reshape((n_mo,n_mo))
+        for jes in np.arange(ies+1,nes):
+#            print(ies,jes,"are the es")
+            tdm=tdm+2*((wvpck_data[ies]*wvpck_data[jes].conjugate()).real)*tran_den_mat[(ies)*n_states_neut+(jes)].reshape((n_mo,n_mo))
+
+    for ix in np.arange(0,nx):
+#            print(ix,"/",nx)
+        x=xmin+ix*dx
+        for iy in np.arange(0,ny):
+            y=ymin+iy*dy
+            for iz in np.arange(0,nz):
+                z=zmin+iz*dz
+
+                val=0
+                lcao_num=len(lcao_num_array[ir][0])
+                coord=np.array([x,y,z])
+                coordp=coord-nucl_coord[ir][nucl_index-1]
+                rp=np.zeros(lcao_num)
+                tp=np.zeros(lcao_num)
+                fp=np.zeros(lcao_num)
+                xp=coordp.T[0]
+                yp=coordp.T[1]
+                zp=coordp.T[2]
+                xp=xp.copy(order='C')
+                yp=yp.copy(order='C')
+                zp=zp.copy(order='C')
+                rp=rp.copy(order='C')
+                tp=tp.copy(order='C')
+                fp=fp.copy(order='C')
+
+                spher.pcart_to_spher(xp,yp,zp,rp,tp,fp)
+                r,t,f=rp.T,tp.T,fp.T
+                angular=np.zeros(lcao_num)
+                l=bas_fun_type.T[0]
+                ml=bas_fun_type.T[1]
+                l=l.copy(order='C')
+                ml=ml.copy(order='C')
+                angular=angular.copy(order='C')
+                spher.pspher_harmo(t,f,l,ml,angular)
+    
+                i=np.arange(0,n_mo)
+                phii=mo_value(r,t,f,i,nucl_index,nucl_coord[ir],bas_fun_type,cont_num,cont_zeta,cont_coeff,lcao_num_array[ir],lcao_coeff_array[ir],angular)
+
+                val=np.dot(phii.T,np.matmul(tdm,phii))
+    
+    
+#                    for i in np.arange(0,n_mo):
+#                        for j in np.arange(0,n_mo):
+    #                        val = val + tran_den_mat[position_index][state_1_index*n_states_neut+state_2_index][i*n_mo+j]*mo_value(r,t,f,i,nucl_index,nucl_coord[position_index],bas_fun_type,cont_num,cont_zeta,cont_coeff,lcao_num_array[position_index],lcao_coeff_array[position_index],angular)*mo_value(r,t,f,j,nucl_index,nucl_coord[position_index],bas_fun_type,cont_num,cont_zeta,cont_coeff,lcao_num_array[position_index],lcao_coeff_array[position_index],angular)
+        #print(tran_den_mat[position_index][state_1_index*n_states_neut+state_2_index][i*n_mo+j],mo_value(x,y,z,position_index,j,nucl_index,nucl_coord[position_index],bas_fun_type,cont_num,cont_zeta,cont_coeff,lcao_num_array[position_index],lcao_coeff_array[position_index]))
+                    #        print('{}/{}'.format(i*n_mo+j,n_mo**2))
+        
+                cube_array[ix][iy][iz]=cube_array[ix][iy][iz]+val
+#                    print(val,ix,iy,iz)
+    
+    target_file="/Users/stephan/Desktop/wavepack_pprobe_VMI_068_00125/CEPPI2/density_time_"+str(time_index)+".cub"
+    cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,dataloc,cube_array)
+
+
+
 
