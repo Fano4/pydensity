@@ -7,6 +7,8 @@ import math
 import h5py as h5
 import spherical_util as spher
 import fortranformat as ff
+import os
+import pickle
 import sys
 import scipy as sp
 from scipy import special
@@ -105,14 +107,25 @@ def from_string_to_vector(strin):
 
 def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive, cut_states):
     '''
-    This is intended to convert Molcas generated hdf5 file data (rasscf) to the format used by pydensity.
-    argument: h5 file object
+    This is intended to convert Molcas generated hdf5 file data (rasscf) to the format
+    used by pydensity.
+
+    molcas_h5file :: h5 file object
+    up_down_file :: FilePath
+    inactive :: Int <- number of inactive orbital in the casscf problem
+    cut_states :: Int  <- number of states you want to consider
+
     returns the set of data arrays
     '''
+
     print("Getting CI vectors data")
     _ , ci_length = molcas_h5file['CI_VECTORS'].shape
     ci_coefficients = np.asarray(molcas_h5file['CI_VECTORS'][:cut_states]).swapaxes(0,1).flatten() # I need this vector flattened
     MO_index, spin_state = string_active_space_transformer(up_down_file, inactive)
+
+    basis_f_id = molcas_h5file['BASIS_FUNCTION_IDS']
+    primi_id = molcas_h5file['PRIMITIVE_IDS']
+
 
     # PARSE THINGS
     print("Getting MO Occupation and electron data")
@@ -123,16 +136,18 @@ def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive, cut_states):
 
     n_mo = MO_OCCUPATIONS[np.nonzero(MO_OCCUPATIONS)].size
     print("Getting nuclear data")
-    nucl_index = np.asarray(molcas_h5file['BASIS_FUNCTION_IDS'][:,0]) # THIS NEEDS TO BE np.array([])
+    nucl_index = np.asarray(basis_f_id[:,0]) # THIS NEEDS TO BE np.array([])
     nucl_coord = np.asarray(molcas_h5file['CENTER_COORDINATES']) # THIS NEEDS TO BE np.array([])
     print("Getting spherical harmonics data")
-    bas_fun_type = np.asarray(molcas_h5file['BASIS_FUNCTION_IDS'][:,1:3],dtype=np.int32) # THIS NEEDS TO BE np.array([])
+    bas_fun_type = np.asarray(basis_f_id[:,1:3],dtype=np.int32) # THIS NEEDS TO BE np.array([])
     n_states_neut = molcas_h5file['ROOT_ENERGIES'][:cut_states].size # this is ok
 
     '''
-    Now we need to compute the transition density matrix. transition density matrix requires the ci vector,
-    the array containing the occupied mos and the spin state vector.
+    Now we need to compute the transition density matrix. transition density
+    matrix requires the ci vector,the array containing the occupied mos and
+    the spin state vector.
     '''
+
     n_active = n_mo - inactive
 
     tran_den_mat = np.zeros(n_mo*n_mo*n_states_neut*n_states_neut)
@@ -152,44 +167,47 @@ def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive, cut_states):
 
     np.save("testing_tdm",tran_den_mat)
     tran_den_mat = tran_den_mat.reshape((n_states_neut*n_states_neut,n_mo*n_mo))
+
     '''
     We want to evaluate the contraction numbers for every basis function.
     each basis function is described by CENTER - SHELL - L - ML
     for each of them, the number of contractions is given by the number
     of corresponding primitives with the same CENTER - SHELL - L
-
     we just need then to compute this number
-
     We also track the id of every primitive involved in the basis function array in cont_id
-
     '''
-    cont_num = np.zeros((molcas_h5file['BASIS_FUNCTION_IDS']).shape[0],dtype=int)
+
+    cont_num = np.zeros((basis_f_id).shape[0],dtype=int)
     cont_id = []
 
-    for i in np.arange(0,np.asarray(molcas_h5file['BASIS_FUNCTION_IDS']).shape[0]):
-            for j in np.arange(0,np.asarray(molcas_h5file['PRIMITIVE_IDS']).shape[0] ):
-                if( molcas_h5file['BASIS_FUNCTION_IDS'][i][0] == molcas_h5file['PRIMITIVE_IDS'][j][0] and molcas_h5file['BASIS_FUNCTION_IDS'][i][1] == molcas_h5file['PRIMITIVE_IDS'][j][2] and molcas_h5file['BASIS_FUNCTION_IDS'][i][2] == molcas_h5file['PRIMITIVE_IDS'][j][1]):
+    for i in np.arange(0,np.asarray(basis_f_id).shape[0]):
+            for j in np.arange(0,np.asarray(primi_id).shape[0] ):
+                if( basis_f_id[i][0] == primi_id[j][0] and basis_f_id[i][1] == primi_id[j][2] and basis_f_id[i][2] == primi_id[j][1]):
                     cont_num[i] += 1
             cont_id.append(np.zeros(cont_num[i],dtype=int))
             tot = 0
-            for j in np.arange(0,np.asarray(molcas_h5file['PRIMITIVE_IDS']).shape[0] ):
-                if( molcas_h5file['BASIS_FUNCTION_IDS'][i][0] == molcas_h5file['PRIMITIVE_IDS'][j][0] and molcas_h5file['BASIS_FUNCTION_IDS'][i][1] == molcas_h5file['PRIMITIVE_IDS'][j][2] and molcas_h5file['BASIS_FUNCTION_IDS'][i][2] == molcas_h5file['PRIMITIVE_IDS'][j][1]):
+            for j in np.arange(0,np.asarray(primi_id).shape[0] ):
+                if( basis_f_id[i][0] == primi_id[j][0] and basis_f_id[i][1] == primi_id[j][2] and basis_f_id[i][2] == primi_id[j][1]):
                     cont_id[i][tot] = j
                     tot = tot+1
 
     '''
-    The maximum contraction number gives us the size of dimension 1 for the arrays cont_zeta and cont_coeff
-    '''
-    cont_zeta = np.zeros((molcas_h5file['BASIS_FUNCTION_IDS'].shape[0],cont_num.max()))
-    cont_coeff = np.zeros((molcas_h5file['BASIS_FUNCTION_IDS'].shape[0],cont_num.max()))
-
-    '''
-    We need to fill cont_zeta and cont_coeff now. These numbers are given, for every contraction in the PRIMITIVES array.
-    The difficulty is that we should fill the arrays with the values respective to the corresponding primitive.
-    We assume that the primitives are used in the same order as they are called in the BASIS_FUNCTION_IDS array
+    The maximum contraction number gives us the size of dimension 1 for
+    the arrays cont_zeta and cont_coeff
     '''
 
-    for i in np.arange(0,(molcas_h5file['BASIS_FUNCTION_IDS']).shape[0]):
+    cont_zeta = np.zeros((basis_f_id.shape[0],cont_num.max()))
+    cont_coeff = np.zeros((basis_f_id.shape[0],cont_num.max()))
+
+    '''
+    We need to fill cont_zeta and cont_coeff now. These numbers are given, for
+    every contraction in the PRIMITIVES array. The difficulty is that we should
+    fill the arrays with the values respective to the corresponding primitive.
+    We assume that the primitives are used in the same order as they are called
+    in the BASIS_FUNCTION_IDS array
+    '''
+
+    for i in np.arange(0,(basis_f_id).shape[0]):
         for j in np.arange(0,cont_num[i]):
             cont_zeta[i,j] = np.asarray(molcas_h5file['PRIMITIVES'])[cont_id[i][j],0]
             cont_coeff[i,j] = np.asarray(molcas_h5file['PRIMITIVES'])[cont_id[i][j],1]
@@ -197,39 +215,58 @@ def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive, cut_states):
 #    cont_zeta=np.asarray(molcas_h5file['PRIMITIVES'])[:,0]
 #    cont_coeff=np.asarray(molcas_h5file['PRIMITIVES'])[:,1]
 
-    lcao_coeff_array = np.asarray(molcas_h5file['MO_VECTORS']).reshape((molcas_h5file['BASIS_FUNCTION_IDS'].shape[0],molcas_h5file['BASIS_FUNCTION_IDS'].shape[0]))
+    lcao_coeff_array = np.asarray(molcas_h5file['MO_VECTORS']).reshape((basis_f_id.shape[0],basis_f_id.shape[0]))
     lcao_num_array = lcao_coeff_array.shape[0]
 
     return n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array
 
 
 
+def main(molcas_h5file_path,updown_file,target_file,inactive,cut_states):
+    '''
+    molcas_h5file_path :: Filepath <- h5 of Molcas
+    updown_file :: Filepath <- input up and down file
+    target_file :: Filepath <- output cube
+    inactive :: Int <- inactive orbitals
+    cut_states :: Int <- number of states
+    '''
 
+    pickle_file_name = os.path.splitext(molcas_h5file_path)[0] + '.pickle'
 
-if __name__ == "__main__" :
-    fn = '/home/alessio/config/Stephan/up_down' # ON SASHA GREY
-    #fn = '/Users/stephan/dox/Acu-Stephan/up_down' # ON STEPH MACBOOK
-    inactive = 23 # the inactive orbitals
-    #molcas_h5file = h5.File('/Users/stephan/dox/Acu-Stephan/zNorbornadiene_P005-000_P020-000_P124-190.rasscf.h5','r') # ON STEPH MACBOOK
-    #molcas_h5file = h5.File('/home/alessio/config/Stephan/zNorbornadiene_P005-000_P020-000_P124-190.rasscf.h5','r') # ON SASHA
-    molcas_h5file = h5.File('/home/alessio/config/Stephan/zNorbornadiene_P000-000_P017-136_P114-766.rasscf.h5','r') # ON SASHA
+    # if pickle file exists, read it, if not, create it.
+    if os.path.isfile(pickle_file_name):
+        print('\nI see Pickle file {}\n'.format(pickle_file_name))
+        n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array = pickle.load(open(pickle_file_name,'rb'))
+    else:
+        molcas_h5file = h5.File(molcas_h5file_path, 'r')
+        print("Entering Molcas To Wavepack Routine")
+        return_tuple = Molcas_to_Wavepack(molcas_h5file,updown_file,inactive,cut_states)
+        print("Molcas To Wavepack Routine Done!")
+        molcas_h5file.close()
 
+        # unpack the data in name variables and save as pickle
+        print('\nWriting file {}\n'.format(pickle_file_name))
+        pickle.dump(return_tuple, open(pickle_file_name, "wb" ))
+        n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array = return_tuple
 
-
-    print("Entering Molcas To Wavepack Routine")
-    cut_states = 8
-    n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array = Molcas_to_Wavepack(molcas_h5file,fn,inactive,cut_states)
-    molcas_h5file.close()
-    print("Molcas To Wavepack Routine Done!")
-
+    print('Writing cube {}'.format(target_file))
 
     nes = n_states_neut
-    #WVPCK_DATA REPRESENT THE AMPLITUDE ON THE ELECTRONIC STATES FOR THE CONSIDERED TIME. IT IS AN ARRAY WITH SIZE NES IS SINGLE POINT, AND A MATRIX WITH SIZE NES X NGEOM IF GEOMETRY DEPENDENT
+
+    '''
+    wvpck_data represent the amplitude on the electronic states for the considered time.
+    it is an array with size nes is single point, and a matrix with size nes x ngeom if
+    geometry dependent
+    '''
 
     wvpck_data = np.zeros(nes)
     wvpck_data[6] = 1
 
-    #TDM IS THE TRANSITION DENSITY MATRIX IN THE BASIS OF MO'S, AVERAGRED OVER THE POPULATIONS IN THE EXCITED STATES.
+    '''
+    tdm is the transition density matrix in the basis of mo's, averagred over the populations
+    in the excited states.
+    '''
+
     tdm = np.zeros((n_mo,n_mo))
 
     for ies in np.arange(0,nes):
@@ -238,8 +275,11 @@ if __name__ == "__main__" :
 #            print(ies,jes,"are the es")
             tdm = tdm+2*((wvpck_data[ies]*wvpck_data[jes].conjugate()).real)*tran_den_mat[(ies)*n_states_neut+(jes)].reshape((n_mo,n_mo))
 
-    #ONCE YOU COMPUTED THE AVERGARED TDM, YOU JUST NEED TO EVALUATE THE DENSITY
-    # this is a box centered in the origin 0,0,0
+    '''
+    once you computed the averaged tdm, you just need to evaluate the density
+    this is a box centered in the origin 0,0,0
+    '''
+
     xmin = -10.0
     ymin = -10.0
     zmin = -10.0
@@ -295,8 +335,25 @@ if __name__ == "__main__" :
                 cube_array[ix][iy][iz] = cube_array[ix][iy][iz]+val
 #                    print(val,ix,iy,iz)
 
-    #target_file = "/Users/stephan/Desktop/density_test_alessio_.cub" #ON MACBOOK
-    target_file = '/home/alessio/config/Stephan/density_test_alessio_.cube' # ON SASHA
     cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,cube_array,nucl_coord)
+
+
+if __name__ == "__main__" :
+
+    # on MAC
+    #updown_file = '/Users/stephan/dox/Acu-Stephan/up_down'
+    #molcas_h5file_path = '/Users/stephan/dox/Acu-Stephan/zNorbornadiene_P005-000_P020-000_P124-190.rasscf.h5'
+    #target_file = "/Users/stephan/Desktop/density_test_alessio_.cub"
+
+
+    # ON SASHA
+    updown_file = '/home/alessio/config/Stephan/up_down'
+    molcas_h5file_path = '/home/alessio/config/Stephan/zNorbornadiene_P000-000_P017-136_P114-766.rasscf.h5'
+    target_file = '/home/alessio/config/Stephan/density_test_alessio_done.cube'
+
+    inactive = 23
+    cut_states = 8
+
+    main(molcas_h5file_path,updown_file,target_file,inactive,cut_states)
 
 
