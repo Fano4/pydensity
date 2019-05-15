@@ -220,6 +220,21 @@ def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive, cut_states):
 
     return n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array
 
+def pickleLoad(fn):
+    '''
+    tedious to remember protocol flag and stuffs
+    fn :: FilePath
+    '''
+    return pickle.load(open(fn,'rb'))
+
+def pickleSave(fn,thing):
+    '''
+    tedious part 2
+    fn :: FilePath
+    thing :: Structure to save
+    '''
+    with open(fn, "wb" ) as pickle_file:
+        pickle.dump(thing, pickle_file, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def main(molcas_h5file_path,updown_file,target_file,inactive,cut_states):
@@ -231,12 +246,13 @@ def main(molcas_h5file_path,updown_file,target_file,inactive,cut_states):
     cut_states :: Int <- number of states
     '''
 
+    # I remove the extension from h5 and put pickle one
     pickle_file_name = os.path.splitext(molcas_h5file_path)[0] + '.pickle'
 
-    # if pickle file exists, read it, if not, create it.
+    # if pickle file exists, read it, if not, create it with Molcas_to_Wavepack.
     if os.path.isfile(pickle_file_name):
         print('\nI see Pickle file {}\n'.format(pickle_file_name))
-        n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array = pickle.load(open(pickle_file_name,'rb'))
+        n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array = pickleLoad(pickle_file_name)
     else:
         molcas_h5file = h5.File(molcas_h5file_path, 'r')
         print("Entering Molcas To Wavepack Routine")
@@ -246,7 +262,9 @@ def main(molcas_h5file_path,updown_file,target_file,inactive,cut_states):
 
         # unpack the data in name variables and save as pickle
         print('\nWriting file {}\n'.format(pickle_file_name))
-        pickle.dump(return_tuple, open(pickle_file_name, "wb" ))
+
+        pickleSave(pickle_file_name,return_tuple)
+
         n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array = return_tuple
 
     print('Writing cube {}'.format(target_file))
