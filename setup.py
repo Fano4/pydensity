@@ -8,9 +8,7 @@ import numpy as np
 ext = Extension("spherical_util",
         sources=["spherical_util.pyx","spherical_utils.cpp"],
         language="c++",
-
-#                cythonize('spherical_util.pyx'),
         include_dirs=[np.get_include()])
 
-setup(name="spherical_util",
+setup(name="density_builder",
         ext_modules=cythonize(ext))

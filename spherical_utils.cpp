@@ -162,7 +162,7 @@ void build_transition_density_matrix(int n_states_neut,int n_closed,int n_occ,in
             {
                //tran_den_mat_mo[n_states_neut*i+j][(n_occ+n_closed)*k+kp] = 0;
                tran_den_mat_mo[i*n_states_neut*(n_occ+n_closed)*(n_occ+n_closed)+j*(n_occ+n_closed)*(n_occ+n_closed)+k*(n_occ+n_closed)+kp] = 0;
-               cout<<"states "<<i<<"-"<<j<<" ; MO "<<k<<"-"<<kp<<"\n";
+               //cout<<"states "<<i<<"-"<<j<<" ; MO "<<k<<"-"<<kp<<"\n";
                for(m=0;m!=ci_size_neut;m++)
                {
                   for(n=m;n!=ci_size_neut;n++)
