@@ -248,11 +248,10 @@ def pickleSave(fn,thing):
 
 
 
-def get_all_data(molcas_h5file_path,updown_file,target_file,inactive,cut_states):
+def get_all_data(molcas_h5file_path,updown_file,inactive,cut_states):
     '''
     molcas_h5file_path :: Filepath <- h5 of Molcas
     updown_file :: Filepath <- input up and down file
-    target_file :: Filepath <- output cube
     inactive :: Int <- inactive orbitals
     cut_states :: Int <- number of states
     '''
@@ -283,95 +282,99 @@ def get_all_data(molcas_h5file_path,updown_file,target_file,inactive,cut_states)
 
 
 
-def creating_cube_function(return_tuple):
-        n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array = return_tuple
-        print('Writing cube {}'.format(target_file))
-        nes = n_states_neut
+def creating_cube_function(return_tuple,target_file):
+    '''
+    return_tuple :: Tuple <- all the data needed for the cube creation
+    target_file :: Filepath <- output cube
+    '''
+    n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array = return_tuple
+    print('Writing cube {}'.format(target_file))
+    nes = n_states_neut
 
-        '''
-        wvpck_data represent the amplitude on the electronic states for the considered time.
-        it is an array with size nes is single point, and a matrix with size nes x ngeom if
-        geometry dependent
-        '''
+    '''
+    wvpck_data represent the amplitude on the electronic states for the considered time.
+    it is an array with size nes is single point, and a matrix with size nes x ngeom if
+    geometry dependent
+    '''
 
-        ngeom=1
-        wvpck_data = np.zeros((nes,ngeom))
-        wvpck_data[0] = 1
+    ngeom=1
+    wvpck_data = np.zeros((nes,ngeom))
+    wvpck_data[0] = 1
 
-        '''
-        tdm is the transition density matrix in the basis of mo's, averaged over the populations
-        in the excited states.
-        '''
+    '''
+    tdm is the transition density matrix in the basis of mo's, averaged over the populations
+    in the excited states.
+    '''
 
-        tdm = np.zeros((n_mo,n_mo))
+    tdm = np.zeros((n_mo,n_mo))
 
-        for ies in np.arange(0,nes):
-            tdm = tdm+abs(wvpck_data[ies])**2*tran_den_mat[(ies)*n_states_neut+(ies)].reshape((n_mo,n_mo))
-            for jes in np.arange(ies+1,nes):
-#                print(ies,jes,"are the es")
-                tdm = tdm+2*((wvpck_data[ies]*wvpck_data[jes].conjugate()).real)*tran_den_mat[(ies)*n_states_neut+(jes)].reshape((n_mo,n_mo))
+    for ies in np.arange(0,nes):
+        tdm = tdm+abs(wvpck_data[ies])**2*tran_den_mat[(ies)*n_states_neut+(ies)].reshape((n_mo,n_mo))
+        for jes in np.arange(ies+1,nes):
+            #print(ies,jes,"are the es")
+            tdm = tdm+2*((wvpck_data[ies]*wvpck_data[jes].conjugate()).real)*tran_den_mat[(ies)*n_states_neut+(jes)].reshape((n_mo,n_mo))
 
-        '''
-        once you computed the averaged tdm, you just need to evaluate the density
-        this is a box centered in the origin 0,0,0
-        '''
+    '''
+    once you computed the averaged tdm, you just need to evaluate the density
+    this is a box centered in the origin 0,0,0
+    '''
 
-        xmin = -10.0
-        ymin = -10.0
-        zmin = -10.0
-        dx = 0.31746032
-        dy = 0.31746032
-        dz = 0.31746032
-        nx = 64
-        ny = 64
-        nz = 64
-        lcao_num = lcao_num_array
-        cube_array = np.zeros((nx,ny,nz))
-        for ix in np.arange(0,nx):
-#                print(ix,"/",nx)
-            x = xmin+ix*dx
-            for iy in np.arange(0,ny):
-                y = ymin+iy*dy
-                for iz in np.arange(0,nz):
-                    z = zmin+iz*dz
+    xmin = -10.0
+    ymin = -10.0
+    zmin = -10.0
+    dx = 0.31746032
+    dy = 0.31746032
+    dz = 0.31746032
+    nx = 64
+    ny = 64
+    nz = 64
+    lcao_num = lcao_num_array
+    cube_array = np.zeros((nx,ny,nz))
+    for ix in np.arange(0,nx):
+        #print(ix,"/",nx)
+        x = xmin+ix*dx
+        for iy in np.arange(0,ny):
+            y = ymin+iy*dy
+            for iz in np.arange(0,nz):
+                z = zmin+iz*dz
 
-                    val = 0
-#                    lcao_num = len(lcao_num_array[0])
-#                    lcao_num = molcas_h5file['BASIS_FUNCTION_IDS'].shape
-                    coord = np.array([x,y,z])
-                    coordp = coord-nucl_coord[nucl_index-1]
-                    rp = np.zeros(lcao_num)
-                    tp = np.zeros(lcao_num)
-                    fp = np.zeros(lcao_num)
-                    xp = coordp.T[0]
-                    yp = coordp.T[1]
-                    zp = coordp.T[2]
-                    xp = xp.copy(order='C')
-                    yp = yp.copy(order='C')
-                    zp = zp.copy(order='C')
-                    rp = rp.copy(order='C')
-                    tp = tp.copy(order='C')
-                    fp = fp.copy(order='C')
+                val = 0
+                #lcao_num = len(lcao_num_array[0])
+                #lcao_num = molcas_h5file['BASIS_FUNCTION_IDS'].shape
+                coord = np.array([x,y,z])
+                coordp = coord-nucl_coord[nucl_index-1]
+                rp = np.zeros(lcao_num)
+                tp = np.zeros(lcao_num)
+                fp = np.zeros(lcao_num)
+                xp = coordp.T[0]
+                yp = coordp.T[1]
+                zp = coordp.T[2]
+                xp = xp.copy(order='C')
+                yp = yp.copy(order='C')
+                zp = zp.copy(order='C')
+                rp = rp.copy(order='C')
+                tp = tp.copy(order='C')
+                fp = fp.copy(order='C')
 
-                    spher.pcart_to_spher(xp,yp,zp,rp,tp,fp)
-                    r,t,f = rp.T,tp.T,fp.T
-                    angular = np.zeros(lcao_num)
-                    l = bas_fun_type.T[0]
-                    ml = bas_fun_type.T[1]
-                    l = l.copy(order='C')
-                    ml = ml.copy(order='C')
-                    angular = angular.copy(order='C')
-                    spher.pspher_harmo(t,f,l,ml,angular)
+                spher.pcart_to_spher(xp,yp,zp,rp,tp,fp)
+                r,t,f = rp.T,tp.T,fp.T
+                angular = np.zeros(lcao_num)
+                l = bas_fun_type.T[0]
+                ml = bas_fun_type.T[1]
+                l = l.copy(order='C')
+                ml = ml.copy(order='C')
+                angular = angular.copy(order='C')
+                spher.pspher_harmo(t,f,l,ml,angular)
 
-                    i = np.arange(0,n_mo)
-                    phii = mo_value(r,t,f,i,nucl_index,nucl_coord,bas_fun_type,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array,angular)
+                i = np.arange(0,n_mo)
+                phii = mo_value(r,t,f,i,nucl_index,nucl_coord,bas_fun_type,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array,angular)
 
-                    val = np.dot(phii.T,np.matmul(tdm,phii))
+                val = np.dot(phii.T,np.matmul(tdm,phii))
 
-                    cube_array[ix][iy][iz] = cube_array[ix][iy][iz]+val
-#                        print(val,ix,iy,iz)
+                cube_array[ix][iy][iz] = cube_array[ix][iy][iz]+val
+                #print(val,ix,iy,iz)
 
-        cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,cube_array,nucl_coord)
+    cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,cube_array,nucl_coord)
 
 
 
@@ -401,17 +404,15 @@ def create_full_list_of_labels(list_labels):
 
     return(all_lab)
 
-def process_single_file(single,updown_file,target_file,inactive,cut_states):
+def process_single_file(full_path_local,updown_file,inactive,cut_states):
     '''
     Function wrapped to be parallel
     get_all_data is an empty IO() function (void in c++)
     single :: the looping function
-    updown_file,target_file,inactive,cut_states :: actual parameters
-                                                   of get_all_data function
+    updown_file,inactive,cut_states :: actual parameters
+                                       of get_all_data function
     '''
-    single_name = single + '.rasscf.h5'
-    full_path_local = os.path.join(molcas_h5file_folder,single_name)
-    full_tuple = get_all_data(full_path_local,updown_file,target_file,inactive,cut_states)
+    full_tuple = get_all_data(full_path_local,updown_file,inactive,cut_states)
     return (full_tuple)
 
 def command_line_parser():
@@ -432,11 +433,12 @@ def command_line_parser():
 
 if __name__ == "__main__" :
 
-    # THIS VARIABLE IS NOW IS GIVEN BY THE -s option
+    # molcas_h5file_path <- THIS VARIABLE IS NOW IS GIVEN BY THE -s option
     # $ python density_builder.py -s 'molcas_h5file_path'
     # molcas_h5file_path = '/Users/stephan/dox/Acu-Stephan/zNorbornadiene_P005-000_P020-000_P124-190.rasscf.h5'
-    # THIS VARIABLE IS NOW GENERATED AUTOMATICALLY DEPENDING ON molcas_h5file_path name
+    # target_file <- THIS VARIABLE IS NOW GENERATED AUTOMATICALLY DEPENDING ON molcas_h5file_path name
     # target_file = "/Users/stephan/Desktop/density_test_alessio_.cub"
+
 
 
     # on MAC
@@ -451,25 +453,29 @@ if __name__ == "__main__" :
     args = command_line_parser()
 
     if args.s != None:
-        # activate single file mode
+        # activate single file mode, this is the code as you left it.
+        # just that get_all_data and creating_cube_function are now two different phases
         molcas_h5file_path = args.s
         target_file = os.path.splitext(molcas_h5file_path)[0] + '.test.cube'
 
         # get_all_data will create the pickle if not present OR use the pickle if present
-        single_file_data = get_all_data(molcas_h5file_path,updown_file,target_file,inactive,cut_states)
-        creating_cube_function(single_file_data)
+        single_file_data = get_all_data(molcas_h5file_path,updown_file,inactive,cut_states)
+        creating_cube_function(single_file_data,target_file)
+
 
     if args.f != None:
         # activate folder mode
         num_cores = multiprocessing.cpu_count()
 
         # new file list thing
-        molcas_h5file_folder = '/home/alessio/config/Stephan/rasscfs'
+        h5file_folder = '/home/alessio/config/Stephan/rasscfs'
         file_list = create_full_list_of_labels(hardcoded_list_of_labels_small)
-        inputs = tqdm(file_list)
+        file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_list ]
+        inputs = tqdm(file_list_abs)
 
         # this seems to create something in the right order
-        all_data_loaded = Parallel(n_jobs=num_cores)(delayed(process_single_file)(i,updown_file,target_file,inactive,cut_states) for i in inputs)
+        # this function make use of molcas_h5file_folder from global variables !!! BAD BAD
+        all_data_loaded = Parallel(n_jobs=num_cores)(delayed(process_single_file)(i,updown_file,inactive,cut_states) for i in inputs)
 
         print(all_data_loaded)
         print('I did this using {} cores'.format(num_cores))
