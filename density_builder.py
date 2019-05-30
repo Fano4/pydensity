@@ -12,6 +12,7 @@ import os
 import pickle
 import sys
 import scipy as sp
+import yaml
 from argparse import ArgumentParser
 from scipy import special
 from joblib import Parallel, delayed
@@ -377,28 +378,14 @@ def creating_cube_function(return_tuple,target_file):
     cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,cube_array,nucl_coord)
 
 
-
-
-
-# This is Alessio work in progress to address in order all the 3d files
-hardcoded_list_of_labels = {
-        'phis_lab' : ['N007-000','N006-500','N006-000','N005-500','N005-000','N004-500','N004-000','N003-500','N003-000','N002-500','N002-000','N001-500','N001-000','N000-500','P000-000','P000-500','P001-000','P001-500','P002-000','P002-500','P003-000','P003-500','P004-000','P004-500','P005-000'],
-        'gams_lab' : ['P012-308','P012-615','P012-923','P013-231','P013-538','P013-846','P014-154','P014-462','P014-769','P015-077','P015-385','P015-692','P016-000','P016-308','P016-615','P016-923','P017-231','P017-538','P017-846','P018-154','P018-462','P018-769','P019-077','P019-385','P019-692','P020-000'],
-        'thes_lab' : ['P124-190','P123-743','P123-296','P122-849','P122-402','P121-955','P121-508','P121-061','P120-615','P120-168','P119-721','P119-274','P118-827','P118-380','P117-933','P117-486','P117-039','P116-592','P116-145','P115-698','P115-251','P114-804','P114-358','P113-911','P113-464','P113-017','P112-570','P112-123','P111-676','P111-229','P110-782','P110-335','P109-888','P109-441','P108-994','P108-547','P108-101','P107-654','P107-207','P106-760','P106-313','P105-866','P105-419','P104-972','P104-525','P104-078','P103-631','P103-184','P102-737','P102-291','P101-844','P101-397','P100-950','P100-503','P100-056','P099-609','P099-162','P098-715','P098-268','P097-821','P097-374','P096-927','P096-480','P096-034','P095-587','P095-140','P094-693','P094-246','P093-799','P093-352','P092-905','P092-458','P092-011','P091-564','P091-117','P090-670','P090-223','P089-777','P089-330','P088-883','P088-436','P087-989','P087-542','P087-095','P086-648','P086-201','P085-754','P085-307','P084-860','P084-413','P083-966','P083-520','P083-073','P082-626','P082-179','P081-732','P081-285','P080-838','P080-391','P079-944']
-}
-
-hardcoded_list_of_labels_small = {'phis_lab' : ['N000-500','P000-000','P000-500'],
-                                  'gams_lab' : ['P016-615','P016-923','P017-231'],
-                                  'thes_lab' : ['P115-251','P114-804','P114-358']}
-
 def create_full_list_of_labels(list_labels):
     '''
     little helper, from the hardcoded list to the full list of expected files
     '''
     all_lab = []
-    for p in list_labels['phis_lab']:
-        for g in list_labels['gams_lab']:
-            for t in list_labels['thes_lab']:
+    for p in list_labels['phis_lab'].split(' '):
+        for g in list_labels['gams_lab'].split(' '):
+            for t in list_labels['thes_lab'].split(' '):
                 name = 'zNorbornadiene_{}_{}_{}'.format(p,g,t)
                 all_lab.append(name)
 
@@ -420,14 +407,16 @@ def command_line_parser():
     this function deals with command line commands
     '''
     parser = ArgumentParser()
-    parser.add_argument("-f", "--folder_mode",
-                    dest="f",
+    parser.add_argument("-i", "--input_multigeom_mode",
+                    dest="i",
                     type=str,
-                    help="The folder with h5 or pickle full path")
+                    help="The yml file to set up the geometries")
     parser.add_argument("-s", "--single_file_mode",
                     dest="s",
                     type=str,
                     help="The single file full path")
+    if len(sys.argv)==1:
+        parser.print_help()
     return parser.parse_args()
 
 
@@ -463,13 +452,16 @@ if __name__ == "__main__" :
         creating_cube_function(single_file_data,target_file)
 
 
-    if args.f != None:
+    if args.i != None:
         # activate folder mode
+
+        data = yaml.load(open(args.i,'r'))
+
         num_cores = multiprocessing.cpu_count()
 
         # new file list thing
-        h5file_folder = '/home/alessio/config/Stephan/rasscfs'
-        file_list = create_full_list_of_labels(hardcoded_list_of_labels_small)
+        h5file_folder = data['folder']
+        file_list = create_full_list_of_labels(data)
         file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_list ]
         inputs = tqdm(file_list_abs)
 
@@ -477,6 +469,13 @@ if __name__ == "__main__" :
         # this function make use of molcas_h5file_folder from global variables !!! BAD BAD
         all_data_loaded = Parallel(n_jobs=num_cores)(delayed(process_single_file)(i,updown_file,inactive,cut_states) for i in inputs)
 
-        print(all_data_loaded)
-        print('I did this using {} cores'.format(num_cores))
+        for i in range(len(all_data_loaded[0])):
+            boole = np.all(all_data_loaded[0][i]==all_data_loaded[1][i])
+            if boole:
+                print('{:2} TRUE  {}'.format(i,type(all_data_loaded[0][i])))
+            else:
+                print('{:2} FALSE {} {}'.format(i,type(all_data_loaded[0][i]),all_data_loaded[0][i].shape))
+
+
+        print('\nI did this using {} cores'.format(num_cores))
 
