@@ -407,6 +407,10 @@ def command_line_parser():
     this function deals with command line commands
     '''
     parser = ArgumentParser()
+    parser.add_argument("-w", "--wavefunction",
+                    dest="w",
+                    type=str,
+                    help="The WF h5 file")
     parser.add_argument("-i", "--input_multigeom_mode",
                     dest="i",
                     type=str,
@@ -414,7 +418,11 @@ def command_line_parser():
     parser.add_argument("-s", "--single_file_mode",
                     dest="s",
                     type=str,
-                    help="The single file full path")
+                    help="The single file path")
+    parser.add_argument("-g", "--global_file_mode",
+                    dest="g",
+                    type=str,
+                    help="The global pickle file path")
     if len(sys.argv)==1:
         parser.print_help()
     return parser.parse_args()
@@ -441,11 +449,20 @@ if __name__ == "__main__" :
 
     args = command_line_parser()
 
+    if args.g != None:
+        # activate Global mode.
+        pickle_file_name = os.path.abspath(args.g)
+        return_tuple = pickleLoad(pickle_file_name)
+        if args.w == None:
+            print('you have to provide Wavefunction file')
+        else:
+            print('reading wf {}'.format(args.w)
+
     if args.s != None:
         # activate single file mode, this is the code as you left it.
         # just that get_all_data and creating_cube_function are now two different phases
         molcas_h5file_path = args.s
-        target_file = os.path.splitext(molcas_h5file_path)[0] + '.test.cube'
+        target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle.cube'
 
         # get_all_data will create the pickle if not present OR use the pickle if present
         single_file_data = get_all_data(molcas_h5file_path,updown_file,inactive,cut_states)
@@ -455,8 +472,9 @@ if __name__ == "__main__" :
     if args.i != None:
         # activate folder mode
 
-        data = yaml.load(open(args.i,'r'))
-
+        yml_filename = os.path.abspath(args.i)
+        data = yaml.load(open(yml_filename,'r'))
+        pickle_global_file_name = os.path.splitext(yml_filename)[0] + '.global.pickle'
         num_cores = multiprocessing.cpu_count()
 
         # new file list thing
@@ -465,17 +483,48 @@ if __name__ == "__main__" :
         file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_list ]
         inputs = tqdm(file_list_abs)
 
+        # code form here is REALLY SHITTY, sorry my man
         # this seems to create something in the right order
-        # this function make use of molcas_h5file_folder from global variables !!! BAD BAD
-        all_data_loaded = Parallel(n_jobs=num_cores)(delayed(process_single_file)(i,updown_file,inactive,cut_states) for i in inputs)
+        a_data = Parallel(n_jobs=num_cores)(delayed(process_single_file)(i,updown_file,inactive,cut_states) for i in inputs)
 
-        for i in range(len(all_data_loaded[0])):
-            boole = np.all(all_data_loaded[0][i]==all_data_loaded[1][i])
+        # This code below just outputs some statistics of what changes between tuples. That is index 2,5,10
+        for i in range(len(a_data[0])):
+            boole = np.all(a_data[0][i]==a_data[1][i])
             if boole:
-                print('{:2} TRUE  {}'.format(i,type(all_data_loaded[0][i])))
+                print('{:2} TRUE  {}'.format(i,type(a_data[0][i])))
             else:
-                print('{:2} FALSE {} {}'.format(i,type(all_data_loaded[0][i]),all_data_loaded[0][i].shape))
+                print('{:2} FALSE {} {}'.format(i,type(a_data[0][i]),a_data[0][i].shape))
 
+
+        # geom is index 2
+        filesN = len(file_list)
+        natoms, _ = a_data[0][2].shape
+        global_geom = np.empty((filesN,natoms,3))
+
+        # something_else is index 5
+        something_else_1, something_else_2 = a_data[0][5].shape
+        global_something_else = np.empty((filesN, something_else_1, something_else_2))
+
+        # TDM is index 10
+        nmo, _ = a_data[0][10].shape
+        global_tdm = np.empty((filesN, nmo, nmo))
+
+        for i,single_tuple in enumerate(a_data):
+            global_geom[i] = single_tuple[2]
+            global_something_else[i] = single_tuple[5]
+            global_tdm[i] = single_tuple[10]
+
+        # global data is list now
+        global_data = list(a_data[0])
+        global_data[2] = global_geom
+        global_data[5] = global_something_else
+        global_data[10] = global_tdm
+
+        for i in range(len(global_data)):
+                print('{:2} {} {}'.format(i,type(global_data[i]),global_data[10].shape))
+
+        print('Creating {}'.format(pickle_global_file_name))
+        pickleSave(pickle_global_file_name,global_data)
 
         print('\nI did this using {} cores'.format(num_cores))
 
