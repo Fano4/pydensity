@@ -283,7 +283,7 @@ def get_all_data(molcas_h5file_path,updown_file,inactive,cut_states):
 
 
 
-def creating_cube_function(return_tuple,target_file):
+def creating_cube_function(wvpck_data,return_tuple,target_file):
     '''
     return_tuple :: Tuple <- all the data needed for the cube creation
     target_file :: Filepath <- output cube
@@ -291,16 +291,6 @@ def creating_cube_function(return_tuple,target_file):
     n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array = return_tuple
     print('Writing cube {}'.format(target_file))
     nes = n_states_neut
-
-    '''
-    wvpck_data represent the amplitude on the electronic states for the considered time.
-    it is an array with size nes is single point, and a matrix with size nes x ngeom if
-    geometry dependent
-    '''
-
-    ngeom=1
-    wvpck_data = np.zeros((nes,ngeom))
-    wvpck_data[0] = 1
 
     '''
     tdm is the transition density matrix in the basis of mo's, averaged over the populations
@@ -428,8 +418,7 @@ def command_line_parser():
     return parser.parse_args()
 
 
-if __name__ == "__main__" :
-
+def Main():
     # molcas_h5file_path <- THIS VARIABLE IS NOW IS GIVEN BY THE -s option
     # $ python density_builder.py -s 'molcas_h5file_path'
     # molcas_h5file_path = '/Users/stephan/dox/Acu-Stephan/zNorbornadiene_P005-000_P020-000_P124-190.rasscf.h5'
@@ -454,19 +443,39 @@ if __name__ == "__main__" :
         pickle_file_name = os.path.abspath(args.g)
         return_tuple = pickleLoad(pickle_file_name)
         if args.w == None:
-            print('you have to provide Wavefunction file')
+            print('\nyou have to provide Wavefunction file\n')
         else:
-            print('reading wf {}'.format(args.w)
+            wf_file_name = os.path.abspath(args.w)
+            print('reading wf {}'.format(wf_file_name))
+            wf_h5_file = h5.File(wf_file_name, 'r')
+            wf_ext = np.asarray(wf_h5_file['WF'])
+
+            # wf = wf_ext[15:-15, 15:-15, 30:-30, :]
+            wf_int = wf_ext[15:-15, 15:-15, 30:-30, :]
+            wf = wf_int[13:16, 14:17, 20:23, :]
+            print('\n\n\n!!!! WARNING HARDCODED CUTS !!!!\n\n\n')
+            phiL,gamL,theL,nstates = wf.shape
+            reshaped_wf = wf.reshape(phiL*gamL*theL,nstates)
+
 
     if args.s != None:
         # activate single file mode, this is the code as you left it.
         # just that get_all_data and creating_cube_function are now two different phases
-        molcas_h5file_path = args.s
+        molcas_h5file_path = os.path.abspath(args.s)
         target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle.cube'
 
         # get_all_data will create the pickle if not present OR use the pickle if present
         single_file_data = get_all_data(molcas_h5file_path,updown_file,inactive,cut_states)
-        creating_cube_function(single_file_data,target_file)
+
+        # 8 is electronic states
+        '''
+        wvpck_data represent the amplitude on the electronic states for the considered time.
+        it is an array with size nes is single point, and a matrix with size nes x ngeom if
+        geometry dependent
+        '''
+        wvpck_data = np.zeros(8)
+        wvpck_data[0] = 1
+        creating_cube_function(wvpck_data,single_file_data,target_file)
 
 
     if args.i != None:
@@ -527,4 +536,7 @@ if __name__ == "__main__" :
         pickleSave(pickle_global_file_name,global_data)
 
         print('\nI did this using {} cores'.format(num_cores))
+
+if __name__ == "__main__" :
+    Main()
 
