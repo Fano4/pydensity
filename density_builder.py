@@ -456,8 +456,10 @@ def Main():
                   (thing,-thing*1j)]
         for time in range(4):
             target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_TIME_{}.cube'.format(time)
+            wvpck_data = np.zeros(8, dtype=complex)
             wvpck_data[0] = amplit[time][0]
             wvpck_data[6] = amplit[time][1]
+            print('This state at time {} has {}={} and {}={}'.format(time, 4, amplit[time][0], 5, amplit[time][1]))
             creating_cube_function_fro_nuc(wvpck_data,single_file_data,molcas_h5file_path,target_file)
 
 
