@@ -17,8 +17,7 @@ import numpy as np
 #from scipy import special
 from joblib import Parallel, delayed
 from tqdm import tqdm
-
-
+from orbitals_molcas import Orbitals
 
 def intplushalf_gamma(n):
     return (np.arccos(-1)**0.5)*sp.special.factorial(2*n)/((4**n)*sp.special.factorial(n))
@@ -110,7 +109,6 @@ def from_string_to_vector(strin):
     return(MO_index,spin_state)
 
 
-
 def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive, cut_states):
     '''
     This is intended to convert Molcas generated hdf5 file data (rasscf) to the format
@@ -147,7 +145,6 @@ def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive, cut_states):
     nucl_coord = np.asarray(molcas_h5file['CENTER_COORDINATES']) # THIS NEEDS TO BE np.array([])
     nucl_coord=nucl_coord/0.529
     print("Getting spherical harmonics data")
-    #bas_fun_type = np.asarray(basis_f_id[:,1:3],dtype=np.int32) # THIS NEEDS TO BE np.array([])
     bas_fun_type = np.asarray(basis_f_id[:,2:4],dtype=np.int32) # THIS NEEDS TO BE np.array([])
     n_states_neut = molcas_h5file['ROOT_ENERGIES'][:cut_states].size # this is ok
 
@@ -174,7 +171,7 @@ def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive, cut_states):
             )
     print("TDM Built!")
 
-    np.save("testing_tdm",tran_den_mat)
+    # np.save("testing_tdm",tran_den_mat)
     tran_den_mat = tran_den_mat.reshape((n_states_neut*n_states_neut,n_mo*n_mo))
 
     '''
@@ -286,7 +283,7 @@ def get_all_data(molcas_h5file_path,updown_file,inactive,cut_states):
 
 
 
-def creating_cube_function_fro_nuc(wvpck_data,return_tuple,target_file):
+def creating_cube_function_fro_nuc(wvpck_data,return_tuple,molcas_h5file_path,target_file):
     '''
     return_tuple :: Tuple <- all the data needed for the cube creation
     target_file :: Filepath <- output cube
@@ -322,56 +319,24 @@ def creating_cube_function_fro_nuc(wvpck_data,return_tuple,target_file):
     nx = 64
     ny = 64
     nz = 64
-    lcao_num = lcao_num_array
     cube_array = np.zeros((nx,ny,nz))
-    for ix in np.arange(0,nx):
-        #print(ix,"/",nx)
-        x = xmin+ix*dx
-        for iy in np.arange(0,ny):
-            y = ymin+iy*dy
-            for iz in np.arange(0,nz):
-                z = zmin+iz*dz
+    x = np.linspace(-10.0,10.0,64)
+    y = np.linspace(-10.0,10.0,64)
+    z = np.linspace(-10.0,10.0,64)
+    B,A,C = np.meshgrid(x,y,z)
+    phii = np.empty((n_mo,64*64*64))
+    orbital_object = Orbitals(molcas_h5file_path,'hdf5')
+    for i in range(n_mo):
+        # the mo method calculates the MO given space orbitals
+        phii[i,:] = orbital_object.mo(i,A.flatten(),B.flatten(),C.flatten())
 
-                val = 0
-                #lcao_num = len(lcao_num_array[0])
-                #lcao_num = molcas_h5file['BASIS_FUNCTION_IDS'].shape
-                coord = np.array([x,y,z])
-                coordp = coord-nucl_coord[nucl_index-1]
-                rp = np.zeros(lcao_num)
-                tp = np.zeros(lcao_num)
-                fp = np.zeros(lcao_num)
-                xp = coordp.T[0]
-                yp = coordp.T[1]
-                zp = coordp.T[2]
-                xp = xp.copy(order='C')
-                yp = yp.copy(order='C')
-                zp = zp.copy(order='C')
-                rp = rp.copy(order='C')
-                tp = tp.copy(order='C')
-                fp = fp.copy(order='C')
+    cube_array = np.zeros(64*64*64)
+    for i in range(n_mo):
+        for j in range(n_mo):
+            # np.tensordot(phii,np.tensordot(tdm,phii,axes=0),axes=0)
+            cube_array += phii[i] * phii[j] * tdm[i,j]
 
-                spher.pcart_to_spher(xp,yp,zp,rp,tp,fp)
-                r,t,f = rp.T,tp.T,fp.T
-                angular = np.zeros(lcao_num)
-                l = bas_fun_type.T[0]
-                ml = bas_fun_type.T[1]
-                l = l.copy(order='C')
-                ml = ml.copy(order='C')
-                angular = angular.copy(order='C')
-                spher.pspher_harmo(t,f,l,ml,angular)
-
-                #print(cont_zeta,cont_coeff)
-                #exit()
-                i = np.arange(0,n_mo)
-                phii = mo_value(r,t,f,i,nucl_index,nucl_coord,bas_fun_type,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array,angular)
-                print(i.shape,xp.shape,yp.shape,zp.shape,phii.shape,phii[0])
-
-                val = np.dot(phii.T,np.matmul(tdm,phii))
-
-                cube_array[ix][iy][iz] = cube_array[ix][iy][iz]+val
-                #print(val,ix,iy,iz)
-
-    cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,cube_array,nucl_coord)
+    cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,cube_array.reshape(64,64,64),nucl_coord * 0.529)
 
 
 def create_full_list_of_labels(list_labels):
@@ -479,11 +444,21 @@ def Main():
         it is an array with size nes is single point, and a matrix with size nes x ngeom if
         geometry dependent
         '''
-        for state in range(1):
-            target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_S{}.cube'.format(state)
-            wvpck_data = np.zeros(8)
-            wvpck_data[state] = 1
-            creating_cube_function_fro_nuc(wvpck_data,single_file_data,target_file)
+        #for state in range(8):
+        #    target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_S{}.cube'.format(state)
+        #    wvpck_data = np.zeros(8)
+        #    wvpck_data[state] = 1
+        #    creating_cube_function_fro_nuc(wvpck_data,single_file_data,molcas_h5file_path,target_file)
+        thing = 0.7071
+        amplit = [(thing,thing),
+                  (thing,thing*1j),
+                  (thing,-thing),
+                  (thing,-thing*1j)]
+        for time in range(4):
+            target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_TIME_{}.cube'.format(time)
+            wvpck_data[0] = amplit[time][0]
+            wvpck_data[6] = amplit[time][1]
+            creating_cube_function_fro_nuc(wvpck_data,single_file_data,molcas_h5file_path,target_file)
 
 
     if args.i != None:
