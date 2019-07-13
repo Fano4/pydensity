@@ -19,25 +19,6 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 from orbitals_molcas import Orbitals
 
-def intplushalf_gamma(n):
-    return (np.arccos(-1)**0.5)*sp.special.factorial(2*n)/((4**n)*sp.special.factorial(n))
-
-def mo_value(r,t,f,mo_index,nucl_index,nucl_coord,bas_fun_type,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array,angular):
-
-    val=0
-
-    lcao_num=lcao_num_array
-    lcao_coeff=lcao_coeff_array[mo_index]
-#    print(lcao_coeff_array.shape,lcao_coeff.shape)
-
-    r2=np.outer(r,np.ones(max(cont_num)))
-
-    coeff=np.sum(cont_coeff*np.exp(-cont_zeta*r2**2),axis=1)*angular*r**bas_fun_type.T[0]
-
-    val=np.dot(lcao_coeff,coeff)
-
-    return val
-
 
 def cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,filename,array_val,nucl_coord):
     file=open(filename,"w")
@@ -48,8 +29,11 @@ def cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,filename,array_val,nucl_coord):
     file.write('{:5} {:11.6f} {:11.6f} {:11.6f} \n'.format(ny,0.000000,dy,0.000000))
     file.write('{:5} {:11.6f} {:11.6f} {:11.6f} \n'.format(nz,0.000000,0.000000,dz))
 
+    normb_atom_type = [6,6,6,1,1,1,1,6,6,6,6,1,1,1,1]
+    print('warning, atomtype for norbornadiene hardcoded')
+
     for i in np.arange(0,nucl_coord.shape[0]):
-        file.write('{:5} {:11.6f} {:11.6f} {:11.6f} {:11.6f} \n'.format(1,1.000000,nucl_coord[i][0],nucl_coord[i][1],nucl_coord[i][2]))
+        file.write('{:5} {:11.6f} {:11.6f} {:11.6f} {:11.6f} \n'.format(normb_atom_type[i],1.000000,nucl_coord[i][0],nucl_coord[i][1],nucl_coord[i][2]))
 
     lineformat=ff.FortranRecordWriter('(1E13.5)')
     for ix in np.arange(0,nx):
@@ -109,7 +93,7 @@ def from_string_to_vector(strin):
     return(MO_index,spin_state)
 
 
-def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive, cut_states):
+def molcas_to_tran_den_mat(molcas_h5file, up_down_file, inactive, cut_states):
     '''
     This is intended to convert Molcas generated hdf5 file data (rasscf) to the format
     used by pydensity.
@@ -123,29 +107,16 @@ def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive, cut_states):
     '''
 
     print("Getting CI vectors data")
-    _ , ci_length = molcas_h5file['CI_VECTORS'].shape
-    ci_coefficients = np.asarray(molcas_h5file['CI_VECTORS'][:cut_states]).swapaxes(0,1).flatten() # I need this vector flattened
+    _, ci_length = molcas_h5file['CI_VECTORS'].shape
+    ci_coefficients = np.asarray(
+                 molcas_h5file['CI_VECTORS'][:cut_states]).swapaxes(0,1).flatten()
     MO_index, spin_state = string_active_space_transformer(up_down_file, inactive)
-
-    basis_f_id = molcas_h5file['BASIS_FUNCTION_IDS']
-    primi_id = molcas_h5file['PRIMITIVE_IDS']
-
 
     # PARSE THINGS
     print("Getting MO Occupation and electron data")
-
     MO_OCCUPATIONS = np.asarray(molcas_h5file['MO_OCCUPATIONS'])
     n_electrons = int(sum(MO_OCCUPATIONS))
-
-
     n_mo = MO_OCCUPATIONS[np.nonzero(MO_OCCUPATIONS)].size
-    print("Getting nuclear data")
-    nucl_index = np.asarray(basis_f_id[:,0]) # THIS NEEDS TO BE np.array([])
-    #  this needs to be atomic units. ALE
-    nucl_coord = np.asarray(molcas_h5file['CENTER_COORDINATES']) # THIS NEEDS TO BE np.array([])
-    nucl_coord=nucl_coord/0.529
-    print("Getting spherical harmonics data")
-    bas_fun_type = np.asarray(basis_f_id[:,2:4],dtype=np.int32) # THIS NEEDS TO BE np.array([])
     n_states_neut = molcas_h5file['ROOT_ENERGIES'][:cut_states].size # this is ok
 
     '''
@@ -171,85 +142,11 @@ def Molcas_to_Wavepack(molcas_h5file, up_down_file, inactive, cut_states):
             )
     print("TDM Built!")
 
-    # np.save("testing_tdm",tran_den_mat)
-    tran_den_mat = tran_den_mat.reshape((n_states_neut*n_states_neut,n_mo*n_mo))
-
-    '''
-    We want to evaluate the contraction numbers for every basis function.
-    each basis function is described by CENTER - SHELL - L - ML
-    for each of them, the number of contractions is given by the number
-    of corresponding primitives with the same CENTER - SHELL - L
-    we just need then to compute this number
-    We also track the id of every primitive involved in the basis function array in cont_id
-    '''
-
-    cont_num = np.zeros((basis_f_id).shape[0],dtype=int)
-    cont_id = []
-
-    for i in np.arange(0,np.asarray(basis_f_id).shape[0]):
-            for j in np.arange(0,np.asarray(primi_id).shape[0] ):
-                if( basis_f_id[i][0] == primi_id[j][0] and basis_f_id[i][1] == primi_id[j][2] and basis_f_id[i][2] == primi_id[j][1]):
-                    cont_num[i] += 1
-            cont_id.append(np.zeros(cont_num[i],dtype=int))
-            tot = 0
-            for j in np.arange(0,np.asarray(primi_id).shape[0] ):
-                if( basis_f_id[i][0] == primi_id[j][0] and basis_f_id[i][1] == primi_id[j][2] and basis_f_id[i][2] == primi_id[j][1]):
-                    cont_id[i][tot] = j
-                    tot = tot+1
-
-    '''
-    The maximum contraction number gives us the size of dimension 1 for
-    the arrays cont_zeta and cont_coeff
-    '''
-
-    cont_zeta = np.zeros((basis_f_id.shape[0],cont_num.max()))
-    cont_coeff = np.zeros((basis_f_id.shape[0],cont_num.max()))
-
-    '''
-    We need to fill cont_zeta and cont_coeff now. These numbers are given, for
-    every contraction in the PRIMITIVES array. The difficulty is that we should
-    fill the arrays with the values respective to the corresponding primitive.
-    We assume that the primitives are used in the same order as they are called
-    in the BASIS_FUNCTION_IDS array
-    '''
-
-    for i in np.arange(0,(basis_f_id).shape[0]):
-        for j in np.arange(0,cont_num[i]):
-            cont_zeta[i,j] = np.asarray(molcas_h5file['PRIMITIVES'])[cont_id[i][j],0]
-            cont_coeff[i,j] = np.asarray(molcas_h5file['PRIMITIVES'])[cont_id[i][j],1]
-            #cont_coeff[i,j] = cont_coeff[i,j]/((0.5*intplushalf_gamma(bas_fun_type[i,0]+1)/(2*cont_zeta[i,j])**(bas_fun_type[i,0]+1.5))**0.5);
-#    cont_zeta=np.asarray(molcas_h5file['PRIMITIVES'])[:,0]
-#    cont_coeff=np.asarray(molcas_h5file['PRIMITIVES'])[:,1]
-
-    lcao_coeff_array = np.asarray(molcas_h5file['MO_VECTORS']).reshape((basis_f_id.shape[0],basis_f_id.shape[0]))
-    lcao_num_array = lcao_coeff_array.shape[0]
-
-    return n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array
+    tran_den_mat = tran_den_mat.reshape((n_states_neut*n_states_neut, n_mo*n_mo))
+    return tran_den_mat
 
 
-
-
-
-def pickleLoad(fn):
-    '''
-    tedious to remember protocol flag and stuffs
-    fn :: FilePath
-    '''
-    return pickle.load(open(fn,'rb'))
-
-def pickleSave(fn,thing):
-    '''
-    tedious part 2
-    fn :: FilePath
-    thing :: Structure to save
-    '''
-    with open(fn, "wb" ) as pickle_file:
-        pickle.dump(thing, pickle_file, protocol=pickle.HIGHEST_PROTOCOL)
-
-
-
-
-def get_all_data(molcas_h5file_path,updown_file,inactive,cut_states):
+def get_TDM(molcas_h5file_path,updown_file,inactive,cut_states):
     '''
     molcas_h5file_path :: Filepath <- h5 of Molcas
     updown_file :: Filepath <- input up and down file
@@ -257,30 +154,27 @@ def get_all_data(molcas_h5file_path,updown_file,inactive,cut_states):
     cut_states :: Int <- number of states
     '''
 
-    # I remove the extension from h5 and put pickle one
-    pickle_file_name = os.path.splitext(molcas_h5file_path)[0] + '.pickle'
+    # if TDM is in file, read file, otherwise create a new h5 file with transition density matrix.
 
-    # if pickle file exists, read it, if not, create it with Molcas_to_Wavepack.
-    if os.path.isfile(pickle_file_name):
-        print('\nI see Pickle file {}\n'.format(pickle_file_name))
-        return_tuple = pickleLoad(pickle_file_name)
+    molcas_h5file = h5.File(molcas_h5file_path, 'r')
+    if 'TDM' in molcas_h5file.keys():
+        # just read the file
+        transition_density_matrix = molcas_h5file['TDM']
+        print('File {} already contains a TDM'.format(molcas_h5file_path))
     else:
-        molcas_h5file = h5.File(molcas_h5file_path, 'r')
-        print("Entering Molcas To Wavepack Routine")
-        return_tuple = Molcas_to_Wavepack(molcas_h5file,updown_file,inactive,cut_states)
-        print("Molcas To Wavepack Routine Done!")
-        molcas_h5file.close()
-
-        # unpack the data in name variables and save as pickle
-        print('\nWriting file {}\n'.format(pickle_file_name))
-
-        pickleSave(pickle_file_name,return_tuple)
-
-
-
-    # this function here is for debugging purposes only, for the single file option
-    return(return_tuple)
-
+        new_file_name = os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5'
+        if os.path.isfile(new_file_name):
+            print('File {} already exists'.format(new_file_name))
+        else:
+            # calculate the 
+            transition_density_matrix = molcas_to_tran_den_mat(molcas_h5file,
+                    updown_file, inactive, cut_states)
+            # HERE HERE you want to write the new h5 with TDM
+            # I remove the extension from h5 and put the new one
+            with h5.File(new_file_name, 'w') as output_h5_file:
+                output_h5_file.create_dataset('TDM',data=transition_density_matrix)
+                output_h5_file.close()
+    molcas_h5file.close()
 
 
 def creating_cube_function_fro_nuc(wvpck_data,return_tuple,molcas_h5file_path,target_file):
@@ -352,6 +246,7 @@ def create_full_list_of_labels(list_labels):
 
     return(all_lab)
 
+
 def process_single_file(full_path_local,updown_file,inactive,cut_states):
     '''
     Function wrapped to be parallel
@@ -363,11 +258,20 @@ def process_single_file(full_path_local,updown_file,inactive,cut_states):
     full_tuple = get_all_data(full_path_local,updown_file,inactive,cut_states)
     return (full_tuple)
 
+
 def command_line_parser():
     '''
     this function deals with command line commands
     '''
     parser = ArgumentParser()
+    parser.add_argument("-t", "--tdm",
+                    dest="t",
+                    type=str,
+                    help="The rasscf h5 file without TDM")
+    parser.add_argument("-f", "--folder_tdm",
+                    dest="f",
+                    type=str,
+                    help="A folder of rasscf h5 files without TDM")
     parser.add_argument("-w", "--wavefunction",
                     dest="w",
                     type=str,
@@ -409,6 +313,28 @@ def Main():
 
     args = command_line_parser()
 
+    if args.t != None:
+        print('we are in TDM creation mode')
+        molcas_h5file_path = os.path.abspath(args.t)
+        get_TDM(molcas_h5file_path, updown_file, inactive, cut_states)
+
+    if args.f != None:
+        num_cores = multiprocessing.cpu_count()
+        num_cores = 16
+
+        # new file list thing
+        h5file_folder = args.f
+
+        strintg = ('We are in folder TDM creation mode\n\n{}\nWith {} cores')
+        print(strintg.format(h5file_folder,num_cores))
+
+        abs_path = os.path.abspath(args.f)
+        file_list_abs = [os.path.join(abs_path, f) for f in os.listdir(abs_path)]
+        inputs = tqdm(file_list_abs)
+
+        Parallel(n_jobs=num_cores)(delayed(get_TDM)(i,updown_file,inactive,cut_states) for i in inputs)
+
+
     if args.g != None:
         # activate Global mode.
         pickle_file_name = os.path.abspath(args.g)
@@ -444,11 +370,12 @@ def Main():
         it is an array with size nes is single point, and a matrix with size nes x ngeom if
         geometry dependent
         '''
-        #for state in range(8):
-        #    target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_S{}.cube'.format(state)
-        #    wvpck_data = np.zeros(8)
-        #    wvpck_data[state] = 1
-        #    creating_cube_function_fro_nuc(wvpck_data,single_file_data,molcas_h5file_path,target_file)
+        for state in range(8):
+            target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_S{}.cube'.format(state)
+            wvpck_data = np.zeros(8)
+            wvpck_data[state] = 1
+            creating_cube_function_fro_nuc(wvpck_data,single_file_data,molcas_h5file_path,target_file)
+        # 0.7071 = sqrt(2)
         thing = 0.7071
         amplit = [(thing,thing),
                   (thing,thing*1j),
