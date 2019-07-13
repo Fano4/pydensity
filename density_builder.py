@@ -268,6 +268,10 @@ def command_line_parser():
                     dest="t",
                     type=str,
                     help="The rasscf h5 file without TDM")
+    parser.add_argument("-c", "--core",
+                    dest="c",
+                    type=int,
+                    help="number of cores for the calculation")
     parser.add_argument("-f", "--folder_tdm",
                     dest="f",
                     type=str,
@@ -319,8 +323,11 @@ def Main():
         get_TDM(molcas_h5file_path, updown_file, inactive, cut_states)
 
     if args.f != None:
-        num_cores = multiprocessing.cpu_count()
-        num_cores = 16
+        if args.c != None:
+            #num_cores = multiprocessing.cpu_count()
+            num_cores = 16
+        else:
+            num_cores = args.c
 
         # new file list thing
         h5file_folder = args.f
