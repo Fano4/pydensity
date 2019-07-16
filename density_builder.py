@@ -264,6 +264,10 @@ def command_line_parser():
     this function deals with command line commands
     '''
     parser = ArgumentParser()
+    parser.add_argument("-l", "--list-tdm",
+                    dest="l",
+                    nargs='+',
+                    help="A list of rasscf.h5 file to process")
     parser.add_argument("-t", "--tdm",
                     dest="t",
                     type=str,
@@ -317,6 +321,20 @@ def Main():
 
     args = command_line_parser()
 
+    if args.l != None:
+        list_of_files = args.l
+        if args.c != None:
+            #num_cores = multiprocessing.cpu_count()
+            num_cores = 4
+        else:
+            num_cores = len(list_of_files)
+        strintg = ('We are in multiple file TDM creation mode:\n{}\nWith {} cores')
+        print(strintg.format(list_of_files,num_cores))
+
+        abs_paths = [os.path.abspath(x) for x in list_of_files]
+        inputs = tqdm(abs_paths)
+        Parallel(n_jobs=num_cores)(delayed(get_TDM)(i,updown_file,inactive,cut_states) for i in inputs)
+
     if args.t != None:
         print('we are in TDM creation mode')
         molcas_h5file_path = os.path.abspath(args.t)
@@ -335,7 +353,7 @@ def Main():
         strintg = ('We are in folder TDM creation mode\n\n{}\nWith {} cores')
         print(strintg.format(h5file_folder,num_cores))
 
-        abs_path = os.path.abspath(args.f)
+        abs_path = os.path.abspath(h5file_folder)
         file_list_abs = [os.path.join(abs_path, f) for f in os.listdir(abs_path)]
         inputs = tqdm(file_list_abs)
 

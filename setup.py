@@ -11,4 +11,5 @@ ext = Extension("spherical_util",
         include_dirs=[np.get_include()])
 
 setup(name="density_builder",
+        #install_requires=['h5py', 'numpy', 'joblib', 'fortranformat', 'tqdm'],
         ext_modules=cythonize(ext))
