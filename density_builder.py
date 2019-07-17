@@ -182,15 +182,15 @@ def creating_cube_function_fro_nuc(wvpck_data,return_tuple,molcas_h5file_path,ta
     return_tuple :: Tuple <- all the data needed for the cube creation
     target_file :: Filepath <- output cube
     '''
-    n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array = return_tuple
+    # neede before pegamoyd
+    # n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array = return_tuple
+    n_mo,nucl_coord,n_states_neut,tran_den_mat = return_tuple
     print('Writing cube {}'.format(target_file))
     nes = n_states_neut
-
     '''
     tdm is the transition density matrix in the basis of mo's, averaged over the populations
     in the excited states.
     '''
-
     tdm = np.zeros((n_mo,n_mo))
 
     for ies in np.arange(0,nes):
@@ -203,7 +203,6 @@ def creating_cube_function_fro_nuc(wvpck_data,return_tuple,molcas_h5file_path,ta
     once you computed the averaged tdm, you just need to evaluate the density
     this is a box centered in the origin 0,0,0
     '''
-
     xmin = -10.0
     ymin = -10.0
     zmin = -10.0
@@ -232,6 +231,80 @@ def creating_cube_function_fro_nuc(wvpck_data,return_tuple,molcas_h5file_path,ta
 
     cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,cube_array.reshape(64,64,64),nucl_coord * 0.529)
 
+def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path):
+    '''
+    wvpck_data :: np.array(Double) <- the 1d singular geom multielectronic state wf.
+    return_tuple :: Tuple <- all the rest of the data needed for the cube creation
+    target_file :: Filepath <- output cube
+    '''
+    # neede before pegamoyd
+    # n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array = return_tuple
+    n_mo, nes = 31, 8
+    tdm_file = h5.File(os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5', 'r')
+    tran_den_mat = tdm_file['TDM']
+    '''
+    tdm is the transition density matrix in the basis of mo's, averaged over the populations
+    in the excited states.
+    '''
+    tdm = np.zeros((n_mo,n_mo))
+
+    for ies in np.arange(0,nes):
+        tdm = tdm+abs(wvpck_data[ies])**2*tran_den_mat[(ies)*nes+(ies)].reshape((n_mo,n_mo))
+        for jes in np.arange(ies+1,nes):
+            #print(ies,jes,"are the es")
+            tdm = tdm+2*((wvpck_data[ies]*wvpck_data[jes].conjugate()).real)*tran_den_mat[(ies)*nes+(jes)].reshape((n_mo,n_mo))
+
+    '''
+    once you computed the averaged tdm, you just need to evaluate the density
+    this is a box centered in the origin 0,0,0
+    '''
+    xmin = -10.0
+    ymin = -10.0
+    zmin = -10.0
+    nx = 8
+    ny = 8
+    nz = 8
+    #nx = 64
+    #ny = 64
+    #nz = 64
+    cube_array = np.zeros((nx,ny,nz))
+    x = np.linspace(xmin,-xmin,nx)
+    y = np.linspace(ymin,-ymin,ny)
+    z = np.linspace(zmin,-zmin,nz)
+    dx = x[1]-x[0]
+    dy = y[1]-y[0]
+    dz = z[1]-z[0]
+    B,A,C = np.meshgrid(x,y,z)
+    phii = np.empty((n_mo,nx*ny*nz))
+    orbital_object = Orbitals(molcas_h5file_path,'hdf5')
+    for i in range(n_mo):
+        # the mo method calculates the MO given space orbitals
+        phii[i,:] = orbital_object.mo(i,A.flatten(),B.flatten(),C.flatten())
+
+    cube_array = np.zeros(nx*ny*nz)
+    for i in range(n_mo):
+        for j in range(n_mo):
+            cube_array += phii[i] * phii[j] * tdm[i,j]
+    return cube_array
+
+    #cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,cube_array.reshape(64,64,64),nucl_coord * 0.529)
+
+def create_full_list_of_labels_numpy(list_labels):
+    '''
+    little helper, from the hardcoded list to the full list of expected files
+    '''
+    ps = list_labels['phis_lab'].split(' ')
+    gs = list_labels['gams_lab'].split(' ')
+    ts = list_labels['thes_lab'].split(' ')
+    all_lab_in_shape = np.empty((len(ps),len(gs),len(ts)),dtype=object)
+    for p,pL in enumerate(ps):
+        for g,gL in enumerate(gs):
+            for t,tL in enumerate(ts):
+                name = 'zNorbornadiene_{}_{}_{}'.format(pL,gL,tL)
+                all_lab_in_shape[p,g,t] = name
+
+    return(all_lab_in_shape)
+
 
 def create_full_list_of_labels(list_labels):
     '''
@@ -257,6 +330,31 @@ def process_single_file(full_path_local,updown_file,inactive,cut_states):
     '''
     full_tuple = get_all_data(full_path_local,updown_file,inactive,cut_states)
     return (full_tuple)
+
+
+def abs2(x):
+    '''
+    x :: complex
+    This is a reimplementation of the abs value for complex numbers
+    '''
+    return x.real**2 + x.imag**2
+
+def give_me_stats(time, wf, threshold):
+    pL,gL,tL,_ = wf.shape
+    new_one = abs2(wf)
+    calc = 0
+    calculate_this = np.zeros((pL,gL,tL), dtype=bool)
+    mod_sum = 0
+    for p in range(pL):
+        for g in range(gL):
+            for t in range(tL):
+                if np.sum(new_one[p,g,t]) > threshold:
+                    mod_sum += np.sum(new_one[p,g,t])
+                    calc += 1
+                    calculate_this[p,g,t] = True
+    norm = np.linalg.norm(wf)
+    print('{:6.2f} {:5} {:5.2f} {:5.2f} {:5.2f}%'.format(time, calc, mod_sum, norm,mod_sum/norm*100))
+    return calculate_this
 
 
 def command_line_parser():
@@ -292,10 +390,10 @@ def command_line_parser():
                     dest="s",
                     type=str,
                     help="The single file path")
-    parser.add_argument("-g", "--global_file_mode",
-                    dest="g",
-                    type=str,
-                    help="The global pickle file path")
+    #parser.add_argument("-g", "--global_file_mode",
+    #                dest="g",
+    #                type=str,
+    #                help="The global pickle file path")
     if len(sys.argv)==1:
         parser.print_help()
     return parser.parse_args()
@@ -315,7 +413,6 @@ def Main():
 
     # ON SASHA
     updown_file = '/home/alessio/config/Stephan/up_down'
-
     inactive = 23
     cut_states = 8
 
@@ -359,27 +456,25 @@ def Main():
 
         Parallel(n_jobs=num_cores)(delayed(get_TDM)(i,updown_file,inactive,cut_states) for i in inputs)
 
+    #if args.g != None:
+    #    # activate Global mode.
+    #    pickle_file_name = os.path.abspath(args.g)
+    #    return_tuple = pickleLoad(pickle_file_name)
+    #    if args.w == None:
+    #        print('\nyou have to provide Wavefunction file\n')
+    #    else:
+    #        wf_file_name = os.path.abspath(args.w)
+    #        print('reading wf {}'.format(wf_file_name))
+    #        wf_h5_file = h5.File(wf_file_name, 'r')
+    #        wf_ext = np.asarray(wf_h5_file['WF'])
 
-    if args.g != None:
-        # activate Global mode.
-        pickle_file_name = os.path.abspath(args.g)
-        return_tuple = pickleLoad(pickle_file_name)
-        if args.w == None:
-            print('\nyou have to provide Wavefunction file\n')
-        else:
-            wf_file_name = os.path.abspath(args.w)
-            print('reading wf {}'.format(wf_file_name))
-            wf_h5_file = h5.File(wf_file_name, 'r')
-            wf_ext = np.asarray(wf_h5_file['WF'])
-
-            # wf = wf_ext[15:-15, 15:-15, 30:-30, :]
-            wf_int = wf_ext[15:-15, 15:-15, 30:-30, :]
-            wf = wf_int[13:16, 14:17, 20:23, :]
-            print('\n\n\n!!!! WARNING HARDCODED CUTS !!!!\n\n\n')
-            phiL,gamL,theL,nstates = wf.shape
-            reshaped_wf = wf.reshape(phiL*gamL*theL,nstates)
-            print('Wavefunction is {}'.format(reshaped_wf.shape))
-
+    #        # wf = wf_ext[15:-15, 15:-15, 30:-30, :]
+    #        wf_int = wf_ext[15:-15, 15:-15, 30:-30, :]
+    #        wf = wf_int[13:16, 14:17, 20:23, :]
+    #        print('\n\n\n!!!! WARNING HARDCODED CUTS !!!!\n\n\n')
+    #        phiL,gamL,theL,nstates = wf.shape
+    #        reshaped_wf = wf.reshape(phiL*gamL*theL,nstates)
+    #        print('Wavefunction is {}'.format(reshaped_wf.shape))
 
     if args.s != None:
         # activate single file mode, this is the code as you left it.
@@ -421,58 +516,81 @@ def Main():
         yml_filename = os.path.abspath(args.i)
         data = yaml.load(open(yml_filename,'r'))
         pickle_global_file_name = os.path.splitext(yml_filename)[0] + '.global.pickle'
-        num_cores = multiprocessing.cpu_count()
+        num_cores = data['cores']
+        threshold = data['threshold']
+        wf_file = h5.File(data['wf'],'r')
+        wf_int = wf_file['WF']
+        time = wf_file['Time'][0]
+        wf = wf_int[13:16, 14:17, 20:23, :]
+        print('\n\n\n!!!! WARNING HARDCODED CUTS !!!!\n\n\n')
 
-        # new file list thing
+
+        ## new file list thing
         h5file_folder = data['folder']
-        file_list = create_full_list_of_labels(data)
-        file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_list ]
-        inputs = tqdm(file_list_abs)
+        file_list = create_full_list_of_labels_numpy(data)
 
-        # code form here is REALLY SHITTY, sorry my man
-        # this seems to create something in the right order
-        a_data = Parallel(n_jobs=num_cores)(delayed(process_single_file)(i,updown_file,inactive,cut_states) for i in inputs)
+        # these lines are magic. wf, then absolute value (abs2), then sum along the 
+        # eletronic states, (axis=3)
+        # then get the index of this with np.where
+        # BECAUSE file_list has the same shape than sums, I can use those indexes 
+        # to extract the file name I want in 1D (file_to_be_processed).
+        sums = np.sum(abs2(wf),axis=3)
+        trues_indexes = np.where(sums>threshold)
+        wf_to_be_processed = wf[trues_indexes]
+        file_to_be_processed = file_list[trues_indexes]
+        #print(sums,trues_indexes,file_to_be_processed)
 
-        # This code below just outputs some statistics of what changes between tuples. That is index 2,5,10
-        for i in range(len(a_data[0])):
-            boole = np.all(a_data[0][i]==a_data[1][i])
-            if boole:
-                print('{:2} TRUE  {}'.format(i,type(a_data[0][i])))
-            else:
-                print('{:2} FALSE {} {}'.format(i,type(a_data[0][i]),a_data[0][i].shape))
+        file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed]
+
+        final_cube = np.zeros(8*8*8)
+        # not_parallel one
+        for single_wf, single_file in zip(wf_to_be_processed, file_list_abs):
+            final_cube += creating_cube_function_fro_nuclear_list(single_wf, single_file)
+        print(final_cube)
+        print(final_cube.shape)
+
+        #a_data = Parallel(n_jobs=num_cores)(delayed(process_single_file)(i,updown_file,inactive,cut_states) for i in inputs)
+
+        ## This code below just outputs some statistics of what changes between tuples. That is index 2,5,10
+        #for i in range(len(a_data[0])):
+        #    boole = np.all(a_data[0][i]==a_data[1][i])
+        #    if boole:
+        #        print('{:2} TRUE  {}'.format(i,type(a_data[0][i])))
+        #    else:
+        #        print('{:2} FALSE {} {}'.format(i,type(a_data[0][i]),a_data[0][i].shape))
 
 
-        # geom is index 2
-        filesN = len(file_list)
-        natoms, _ = a_data[0][2].shape
-        global_geom = np.empty((filesN,natoms,3))
+        ## geom is index 2
+        #filesN = len(file_list)
+        #natoms, _ = a_data[0][2].shape
+        #global_geom = np.empty((filesN,natoms,3))
 
-        # something_else is index 5
-        something_else_1, something_else_2 = a_data[0][5].shape
-        global_something_else = np.empty((filesN, something_else_1, something_else_2))
+        ## something_else is index 5
+        #something_else_1, something_else_2 = a_data[0][5].shape
+        #global_something_else = np.empty((filesN, something_else_1, something_else_2))
 
-        # TDM is index 10
-        nmo, _ = a_data[0][10].shape
-        global_tdm = np.empty((filesN, nmo, nmo))
+        ## TDM is index 10
+        #nmo, _ = a_data[0][10].shape
+        #global_tdm = np.empty((filesN, nmo, nmo))
 
-        for i,single_tuple in enumerate(a_data):
-            global_geom[i] = single_tuple[2]
-            global_something_else[i] = single_tuple[5]
-            global_tdm[i] = single_tuple[10]
+        #for i,single_tuple in enumerate(a_data):
+        #    global_geom[i] = single_tuple[2]
+        #    global_something_else[i] = single_tuple[5]
+        #    global_tdm[i] = single_tuple[10]
 
-        # global data is list now
-        global_data = list(a_data[0])
-        global_data[2] = global_geom
-        global_data[5] = global_something_else
-        global_data[10] = global_tdm
+        ## global data is list now
+        #global_data = list(a_data[0])
+        #global_data[2] = global_geom
+        #global_data[5] = global_something_else
+        #global_data[10] = global_tdm
 
-        for i in range(len(global_data)):
-                print('{:2} {} {}'.format(i,type(global_data[i]),global_data[10].shape))
+        #for i in range(len(global_data)):
+        #        print('{:2} {} {}'.format(i,type(global_data[i]),global_data[10].shape))
 
-        print('Creating {}'.format(pickle_global_file_name))
-        pickleSave(pickle_global_file_name,global_data)
+        #print('Creating {}'.format(pickle_global_file_name))
+        #pickleSave(pickle_global_file_name,global_data)
 
-        print('\nI did this using {} cores'.format(num_cores))
+        #print('\nI did this using {} cores'.format(num_cores))
 
 if __name__ == "__main__" :
     Main()
