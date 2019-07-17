@@ -231,7 +231,7 @@ def creating_cube_function_fro_nuc(wvpck_data,return_tuple,molcas_h5file_path,ta
 
     cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,cube_array.reshape(64,64,64),nucl_coord * 0.529)
 
-def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path):
+def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data):
     '''
     wvpck_data :: np.array(Double) <- the 1d singular geom multielectronic state wf.
     return_tuple :: Tuple <- all the rest of the data needed for the cube creation
@@ -258,16 +258,8 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path):
     once you computed the averaged tdm, you just need to evaluate the density
     this is a box centered in the origin 0,0,0
     '''
-    xmin = -10.0
-    ymin = -10.0
-    zmin = -10.0
-    nx = 8
-    ny = 8
-    nz = 8
-    #nx = 64
-    #ny = 64
-    #nz = 64
-    cube_array = np.zeros((nx,ny,nz))
+    xmin, ymin, zmin = data['mins']
+    nx,ny,nz = data['num_points']
     x = np.linspace(xmin,-xmin,nx)
     y = np.linspace(ymin,-ymin,ny)
     z = np.linspace(zmin,-zmin,nz)
@@ -287,7 +279,6 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path):
             cube_array += phii[i] * phii[j] * tdm[i,j]
     return cube_array
 
-    #cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,cube_array.reshape(64,64,64),nucl_coord * 0.529)
 
 def create_full_list_of_labels_numpy(list_labels):
     '''
@@ -545,10 +536,20 @@ def Main():
         final_cube = np.zeros(8*8*8)
         # not_parallel one
         for single_wf, single_file in zip(wf_to_be_processed, file_list_abs):
-            final_cube += creating_cube_function_fro_nuclear_list(single_wf, single_file)
-        print(final_cube)
-        print(final_cube.shape)
+            final_cube += creating_cube_function_fro_nuclear_list(single_wf, single_file, data)
 
+        xmin, ymin, zmin = data['mins']
+        nx, ny, nz = data['num_points']
+        x = np.linspace(xmin,-xmin,nx)
+        y = np.linspace(ymin,-ymin,ny)
+        z = np.linspace(zmin,-zmin,nz)
+        dx = x[1]-x[0]
+        dy = y[1]-y[0]
+        dz = z[1]-z[0]
+
+        target_file = os.path.splitext(data['wf'])[0] + '.density.cube'
+        nucl_coord = np.asarray(h5.File(file_list_abs[0],'r')['CENTER_COORDINATES'])
+        cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
         #a_data = Parallel(n_jobs=num_cores)(delayed(process_single_file)(i,updown_file,inactive,cut_states) for i in inputs)
 
         ## This code below just outputs some statistics of what changes between tuples. That is index 2,5,10
