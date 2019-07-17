@@ -283,6 +283,7 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data):
 def create_full_list_of_labels_numpy(list_labels):
     '''
     little helper, from the hardcoded list to the full list of expected files
+    this keep the shape of the wavefunction
     '''
     ps = list_labels['phis_lab'].split(' ')
     gs = list_labels['gams_lab'].split(' ')
@@ -381,10 +382,6 @@ def command_line_parser():
                     dest="s",
                     type=str,
                     help="The single file path")
-    #parser.add_argument("-g", "--global_file_mode",
-    #                dest="g",
-    #                type=str,
-    #                help="The global pickle file path")
     if len(sys.argv)==1:
         parser.print_help()
     return parser.parse_args()
@@ -446,26 +443,6 @@ def Main():
         inputs = tqdm(file_list_abs)
 
         Parallel(n_jobs=num_cores)(delayed(get_TDM)(i,updown_file,inactive,cut_states) for i in inputs)
-
-    #if args.g != None:
-    #    # activate Global mode.
-    #    pickle_file_name = os.path.abspath(args.g)
-    #    return_tuple = pickleLoad(pickle_file_name)
-    #    if args.w == None:
-    #        print('\nyou have to provide Wavefunction file\n')
-    #    else:
-    #        wf_file_name = os.path.abspath(args.w)
-    #        print('reading wf {}'.format(wf_file_name))
-    #        wf_h5_file = h5.File(wf_file_name, 'r')
-    #        wf_ext = np.asarray(wf_h5_file['WF'])
-
-    #        # wf = wf_ext[15:-15, 15:-15, 30:-30, :]
-    #        wf_int = wf_ext[15:-15, 15:-15, 30:-30, :]
-    #        wf = wf_int[13:16, 14:17, 20:23, :]
-    #        print('\n\n\n!!!! WARNING HARDCODED CUTS !!!!\n\n\n')
-    #        phiL,gamL,theL,nstates = wf.shape
-    #        reshaped_wf = wf.reshape(phiL*gamL*theL,nstates)
-    #        print('Wavefunction is {}'.format(reshaped_wf.shape))
 
     if args.s != None:
         # activate single file mode, this is the code as you left it.
@@ -533,11 +510,6 @@ def Main():
 
         file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed]
 
-        final_cube = np.zeros(8*8*8)
-        # not_parallel one
-        for single_wf, single_file in zip(wf_to_be_processed, file_list_abs):
-            final_cube += creating_cube_function_fro_nuclear_list(single_wf, single_file, data)
-
         xmin, ymin, zmin = data['mins']
         nx, ny, nz = data['num_points']
         x = np.linspace(xmin,-xmin,nx)
@@ -547,10 +519,18 @@ def Main():
         dy = y[1]-y[0]
         dz = z[1]-z[0]
 
+        # not_parallel one
+        #final_cube = np.zeros(nx*ny*nz)
+        #for single_wf, single_file in zip(wf_to_be_processed, file_list_abs):
+        #    final_cube += creating_cube_function_fro_nuclear_list(single_wf, single_file, data)
+
+        # parallel version
+        a_data = Parallel(n_jobs=num_cores)(delayed(creating_cube_function_fro_nuclear_list)(single_wf, single_file, data) for single_wf, single_file in zip(wf_to_be_processed, file_list_abs))
+        final_cube = sum(a_data)
+
         target_file = os.path.splitext(data['wf'])[0] + '.density.cube'
         nucl_coord = np.asarray(h5.File(file_list_abs[0],'r')['CENTER_COORDINATES'])
         cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
-        #a_data = Parallel(n_jobs=num_cores)(delayed(process_single_file)(i,updown_file,inactive,cut_states) for i in inputs)
 
         ## This code below just outputs some statistics of what changes between tuples. That is index 2,5,10
         #for i in range(len(a_data[0])):
