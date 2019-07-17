@@ -2,7 +2,7 @@ folder : /home/alessio/config/Stephan/rasscfs
 wf : /home/alessio/config/Stephan/Gaussian0300.h5
 cores : 16
 mins : [-10.0,-10.0,-10.0]
-num_points : [8,8,8]
+num_points : [4,4,4]
 threshold : 0.00000000000001
 phis_lab : N000-500 P000-000 P000-500
 gams_lab : P016-615 P016-923 P017-231

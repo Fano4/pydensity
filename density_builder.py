@@ -505,6 +505,7 @@ def Main():
         sums = np.sum(abs2(wf),axis=3)
         trues_indexes = np.where(sums>threshold)
         wf_to_be_processed = wf[trues_indexes]
+        sums_to_be_processed = sums[trues_indexes] # I use this to weight geometries
         file_to_be_processed = file_list[trues_indexes]
         #print(sums,trues_indexes,file_to_be_processed)
 
@@ -519,7 +520,7 @@ def Main():
         dy = y[1]-y[0]
         dz = z[1]-z[0]
 
-        # not_parallel one
+        ## not_parallel one
         #final_cube = np.zeros(nx*ny*nz)
         #for single_wf, single_file in zip(wf_to_be_processed, file_list_abs):
         #    final_cube += creating_cube_function_fro_nuclear_list(single_wf, single_file, data)
@@ -529,49 +530,18 @@ def Main():
         final_cube = sum(a_data)
 
         target_file = os.path.splitext(data['wf'])[0] + '.density.cube'
-        nucl_coord = np.asarray(h5.File(file_list_abs[0],'r')['CENTER_COORDINATES'])
+
+        norm_of_abs = sum(sums_to_be_processed)
+
+        to_be_summed = []
+        for file_geom, single_abs in zip(file_list_abs, sums_to_be_processed):
+            geom = np.asarray(h5.File(file_geom,'r')['CENTER_COORDINATES'])
+            mult = single_abs * geom
+            to_be_summed.append(mult)
+        nucl_coord = sum(to_be_summed)/norm_of_abs
+
         cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
 
-        ## This code below just outputs some statistics of what changes between tuples. That is index 2,5,10
-        #for i in range(len(a_data[0])):
-        #    boole = np.all(a_data[0][i]==a_data[1][i])
-        #    if boole:
-        #        print('{:2} TRUE  {}'.format(i,type(a_data[0][i])))
-        #    else:
-        #        print('{:2} FALSE {} {}'.format(i,type(a_data[0][i]),a_data[0][i].shape))
-
-
-        ## geom is index 2
-        #filesN = len(file_list)
-        #natoms, _ = a_data[0][2].shape
-        #global_geom = np.empty((filesN,natoms,3))
-
-        ## something_else is index 5
-        #something_else_1, something_else_2 = a_data[0][5].shape
-        #global_something_else = np.empty((filesN, something_else_1, something_else_2))
-
-        ## TDM is index 10
-        #nmo, _ = a_data[0][10].shape
-        #global_tdm = np.empty((filesN, nmo, nmo))
-
-        #for i,single_tuple in enumerate(a_data):
-        #    global_geom[i] = single_tuple[2]
-        #    global_something_else[i] = single_tuple[5]
-        #    global_tdm[i] = single_tuple[10]
-
-        ## global data is list now
-        #global_data = list(a_data[0])
-        #global_data[2] = global_geom
-        #global_data[5] = global_something_else
-        #global_data[10] = global_tdm
-
-        #for i in range(len(global_data)):
-        #        print('{:2} {} {}'.format(i,type(global_data[i]),global_data[10].shape))
-
-        #print('Creating {}'.format(pickle_global_file_name))
-        #pickleSave(pickle_global_file_name,global_data)
-
-        #print('\nI did this using {} cores'.format(num_cores))
 
 if __name__ == "__main__" :
     Main()
