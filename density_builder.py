@@ -177,59 +177,6 @@ def get_TDM(molcas_h5file_path,updown_file,inactive,cut_states):
     molcas_h5file.close()
 
 
-def creating_cube_function_fro_nuc(wvpck_data,return_tuple,molcas_h5file_path,target_file):
-    '''
-    return_tuple :: Tuple <- all the data needed for the cube creation
-    target_file :: Filepath <- output cube
-    '''
-    # neede before pegamoyd
-    # n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array = return_tuple
-    n_mo,nucl_coord,n_states_neut,tran_den_mat = return_tuple
-    print('Writing cube {}'.format(target_file))
-    nes = n_states_neut
-    '''
-    tdm is the transition density matrix in the basis of mo's, averaged over the populations
-    in the excited states.
-    '''
-    tdm = np.zeros((n_mo,n_mo))
-
-    for ies in np.arange(0,nes):
-        tdm = tdm+abs(wvpck_data[ies])**2*tran_den_mat[(ies)*n_states_neut+(ies)].reshape((n_mo,n_mo))
-        for jes in np.arange(ies+1,nes):
-            #print(ies,jes,"are the es")
-            tdm = tdm+2*((wvpck_data[ies]*wvpck_data[jes].conjugate()).real)*tran_den_mat[(ies)*n_states_neut+(jes)].reshape((n_mo,n_mo))
-
-    '''
-    once you computed the averaged tdm, you just need to evaluate the density
-    this is a box centered in the origin 0,0,0
-    '''
-    xmin = -10.0
-    ymin = -10.0
-    zmin = -10.0
-    dx = 0.31746032
-    dy = 0.31746032
-    dz = 0.31746032
-    nx = 64
-    ny = 64
-    nz = 64
-    cube_array = np.zeros((nx,ny,nz))
-    x = np.linspace(-10.0,10.0,64)
-    y = np.linspace(-10.0,10.0,64)
-    z = np.linspace(-10.0,10.0,64)
-    B,A,C = np.meshgrid(x,y,z)
-    phii = np.empty((n_mo,64*64*64))
-    orbital_object = Orbitals(molcas_h5file_path,'hdf5')
-    for i in range(n_mo):
-        # the mo method calculates the MO given space orbitals
-        phii[i,:] = orbital_object.mo(i,A.flatten(),B.flatten(),C.flatten())
-
-    cube_array = np.zeros(64*64*64)
-    for i in range(n_mo):
-        for j in range(n_mo):
-            # np.tensordot(phii,np.tensordot(tdm,phii,axes=0),axes=0)
-            cube_array += phii[i] * phii[j] * tdm[i,j]
-
-    cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,cube_array.reshape(64,64,64),nucl_coord * 0.529)
 
 def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data):
     '''
@@ -237,8 +184,6 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data):
     return_tuple :: Tuple <- all the rest of the data needed for the cube creation
     target_file :: Filepath <- output cube
     '''
-    # neede before pegamoyd
-    # n_mo,nucl_index,nucl_coord,bas_fun_type,n_states_neut,tran_den_mat,cont_num,cont_zeta,cont_coeff,lcao_num_array,lcao_coeff_array = return_tuple
     n_mo, nes = 31, 8
     tdm_file = h5.File(os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5', 'r')
     tran_den_mat = tdm_file['TDM']
@@ -253,7 +198,6 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data):
         for jes in np.arange(ies+1,nes):
             #print(ies,jes,"are the es")
             tdm = tdm+2*((wvpck_data[ies]*wvpck_data[jes].conjugate()).real)*tran_den_mat[(ies)*nes+(jes)].reshape((n_mo,n_mo))
-
     '''
     once you computed the averaged tdm, you just need to evaluate the density
     this is a box centered in the origin 0,0,0
@@ -331,6 +275,7 @@ def abs2(x):
     '''
     return x.real**2 + x.imag**2
 
+
 def give_me_stats(time, wf, threshold):
     pL,gL,tL,_ = wf.shape
     new_one = abs2(wf)
@@ -354,48 +299,28 @@ def command_line_parser():
     this function deals with command line commands
     '''
     parser = ArgumentParser()
-    parser.add_argument("-l", "--list-tdm",
-                    dest="l",
-                    nargs='+',
-                    help="A list of rasscf.h5 file to process")
     parser.add_argument("-t", "--tdm",
                     dest="t",
-                    type=str,
-                    help="The rasscf h5 file without TDM")
-    parser.add_argument("-c", "--core",
-                    dest="c",
-                    type=int,
-                    help="number of cores for the calculation")
-    parser.add_argument("-f", "--folder_tdm",
-                    dest="f",
-                    type=str,
-                    help="A folder of rasscf h5 files without TDM")
-    parser.add_argument("-w", "--wavefunction",
-                    dest="w",
-                    type=str,
-                    help="The WF h5 file")
+                    nargs='+',
+                    help="A list of rasscf.h5 file to process")
     parser.add_argument("-i", "--input_multigeom_mode",
                     dest="i",
                     type=str,
                     help="The yml file to set up the geometries")
+    parser.add_argument("-c", "--core",
+                    dest="c",
+                    type=int,
+                    help="number of cores for the calculation")
     parser.add_argument("-s", "--single_file_mode",
                     dest="s",
                     type=str,
                     help="The single file path")
-    if len(sys.argv)==1:
+    if len(sys.argv) == 1:
         parser.print_help()
     return parser.parse_args()
 
 
 def Main():
-    # molcas_h5file_path <- THIS VARIABLE IS NOW IS GIVEN BY THE -s option
-    # $ python density_builder.py -s 'molcas_h5file_path'
-    # molcas_h5file_path = '/Users/stephan/dox/Acu-Stephan/zNorbornadiene_P005-000_P020-000_P124-190.rasscf.h5'
-    # target_file <- THIS VARIABLE IS NOW GENERATED AUTOMATICALLY DEPENDING ON molcas_h5file_path name
-    # target_file = "/Users/stephan/Desktop/density_test_alessio_.cub"
-
-
-
     # on MAC
     # updown_file = '/Users/stephan/dox/Acu-Stephan/up_down'
 
@@ -406,13 +331,13 @@ def Main():
 
     args = command_line_parser()
 
-    if args.l != None:
-        list_of_files = args.l
+    if args.t != None:
+        list_of_files = args.t
         if args.c != None:
             #num_cores = multiprocessing.cpu_count()
             num_cores = 4
         else:
-            num_cores = len(list_of_files)
+            num_cores = args.c
         strintg = ('We are in multiple file TDM creation mode:\n{}\nWith {} cores')
         print(strintg.format(list_of_files,num_cores))
 
@@ -420,49 +345,38 @@ def Main():
         inputs = tqdm(abs_paths)
         Parallel(n_jobs=num_cores)(delayed(get_TDM)(i,updown_file,inactive,cut_states) for i in inputs)
 
-    if args.t != None:
-        print('we are in TDM creation mode')
-        molcas_h5file_path = os.path.abspath(args.t)
-        get_TDM(molcas_h5file_path, updown_file, inactive, cut_states)
-
-    if args.f != None:
-        if args.c != None:
-            #num_cores = multiprocessing.cpu_count()
-            num_cores = 16
-        else:
-            num_cores = args.c
-
-        # new file list thing
-        h5file_folder = args.f
-
-        strintg = ('We are in folder TDM creation mode\n\n{}\nWith {} cores')
-        print(strintg.format(h5file_folder,num_cores))
-
-        abs_path = os.path.abspath(h5file_folder)
-        file_list_abs = [os.path.join(abs_path, f) for f in os.listdir(abs_path)]
-        inputs = tqdm(file_list_abs)
-
-        Parallel(n_jobs=num_cores)(delayed(get_TDM)(i,updown_file,inactive,cut_states) for i in inputs)
-
     if args.s != None:
-        # activate single file mode, this is the code as you left it.
-        # just that get_all_data and creating_cube_function are now two different phases
+
         molcas_h5file_path = os.path.abspath(args.s)
+        single_file_data = get_TDM(molcas_h5file_path,updown_file,inactive,cut_states)
 
-        # get_all_data will create the pickle if not present OR use the pickle if present
-        single_file_data = get_all_data(molcas_h5file_path,updown_file,inactive,cut_states)
+        data = { 'mins' : [-10.0,-10.0,-10.0],
+                 'num_points' : [64,64,64]}
 
-        # 8 is electronic states
+        xmin, ymin, zmin = data['mins']
+        nx, ny, nz = data['num_points']
+        x = np.linspace(xmin,-xmin,nx)
+        y = np.linspace(ymin,-ymin,ny)
+        z = np.linspace(zmin,-zmin,nz)
+        dx = x[1]-x[0]
+        dy = y[1]-y[0]
+        dz = z[1]-z[0]
+
+        nucl_coord = np.asarray(h5.File(molcas_h5file_path,'r')['CENTER_COORDINATES'])
+
         '''
         wvpck_data represent the amplitude on the electronic states for the considered time.
         it is an array with size nes is single point, and a matrix with size nes x ngeom if
         geometry dependent
         '''
+
+        # 8 is electronic states
         for state in range(8):
             target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_S{}.cube'.format(state)
             wvpck_data = np.zeros(8)
             wvpck_data[state] = 1
-            creating_cube_function_fro_nuc(wvpck_data,single_file_data,molcas_h5file_path,target_file)
+            final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data)
+            cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
         # 0.7071 = sqrt(2)
         thing = 0.7071
         amplit = [(thing,thing),
@@ -475,21 +389,22 @@ def Main():
             wvpck_data[0] = amplit[time][0]
             wvpck_data[6] = amplit[time][1]
             print('This state at time {} has {}={} and {}={}'.format(time, 4, amplit[time][0], 5, amplit[time][1]))
-            creating_cube_function_fro_nuc(wvpck_data,single_file_data,molcas_h5file_path,target_file)
-
+            final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data)
+            cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
 
     if args.i != None:
         # activate folder mode
 
         yml_filename = os.path.abspath(args.i)
         data = yaml.load(open(yml_filename,'r'))
-        pickle_global_file_name = os.path.splitext(yml_filename)[0] + '.global.pickle'
         num_cores = data['cores']
         threshold = data['threshold']
         wf_file = h5.File(data['wf'],'r')
         wf_int = wf_file['WF']
         time = wf_file['Time'][0]
         wf = wf_int[13:16, 14:17, 20:23, :]
+
+
         print('\n\n\n!!!! WARNING HARDCODED CUTS !!!!\n\n\n')
 
 
