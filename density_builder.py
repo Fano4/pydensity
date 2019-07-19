@@ -419,6 +419,10 @@ def command_line_parser():
                     dest="s",
                     type=str,
                     help="The single file path")
+    parser.add_argument("-w", "--wavefunction",
+                    dest="w",
+                    type=str,
+                    help="Wavefunction stats")
     if len(sys.argv) == 1:
         parser.print_help()
     return parser.parse_args()
@@ -435,6 +439,14 @@ def Main():
     cut_states = 8
 
     args = command_line_parser()
+
+    if args.w != None:
+        print('Waveunction stats mode')
+        threshold = 0.000003
+        wf_file = h5.File(args.w,'r')
+        wf_int = wf_file['WF']
+        time = wf_file['Time'][0]
+        give_me_stats(time, wf_int, threshold)
 
     if args.d != None:
         print('difference mode')
@@ -555,7 +567,10 @@ def Main():
         a_data = Parallel(n_jobs=num_cores)(delayed(creating_cube_function_fro_nuclear_list)(single_wf, single_file, data) for single_wf, single_file in inputs)
         final_cube = sum(a_data)
 
-        target_file = os.path.splitext(data['wf'])[0] + '.density.cube'
+        if 'output_file' in data:
+            target_file = data['output_file']
+        else:
+            target_file = os.path.splitext(data['wf'])[0] + '.density.cube'
 
         norm_of_abs = sum(sums_to_be_processed)
 
