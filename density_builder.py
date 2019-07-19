@@ -402,10 +402,8 @@ def Main():
         wf_file = h5.File(data['wf'],'r')
         wf_int = wf_file['WF']
         time = wf_file['Time'][0]
-        wf = wf_int[13:16, 14:17, 20:23, :]
-
-
-        print('\n\n\n!!!! WARNING HARDCODED CUTS !!!!\n\n\n')
+        #wf = wf_int[13:16, 14:17, 20:23, :]
+        wf = wf_int[15:-15, 15:-15, 30:-30, :]
 
 
         ## new file list thing
@@ -425,6 +423,7 @@ def Main():
         #print(sums,trues_indexes,file_to_be_processed)
 
         file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed]
+        print('Using {} I will process {} files with {} cores'.format(threshold, len(file_list_abs), num_cores))
 
         xmin, ymin, zmin = data['mins']
         nx, ny, nz = data['num_points']
@@ -441,7 +440,8 @@ def Main():
         #    final_cube += creating_cube_function_fro_nuclear_list(single_wf, single_file, data)
 
         # parallel version
-        a_data = Parallel(n_jobs=num_cores)(delayed(creating_cube_function_fro_nuclear_list)(single_wf, single_file, data) for single_wf, single_file in zip(wf_to_be_processed, file_list_abs))
+        inputs = tqdm(zip(wf_to_be_processed, file_list_abs),total=len(wf_to_be_processed))
+        a_data = Parallel(n_jobs=num_cores)(delayed(creating_cube_function_fro_nuclear_list)(single_wf, single_file, data) for single_wf, single_file in inputs)
         final_cube = sum(a_data)
 
         target_file = os.path.splitext(data['wf'])[0] + '.density.cube'
