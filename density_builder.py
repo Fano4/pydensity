@@ -377,7 +377,7 @@ def cube_difference(path_cube_1, path_cube_2):
 
 
 def give_me_stats(time, wf, threshold):
-    new_one = qp.abs2(wf)
+    new_one = abs2(wf)
 
     calc = 0
     calculate_this = np.zeros((pL,gL,tL), dtype=bool)
