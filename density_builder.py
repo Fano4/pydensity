@@ -30,7 +30,7 @@ def cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,filename,array_val,nucl_coord):
     file.write('{:5} {:11.6f} {:11.6f} {:11.6f} \n'.format(nz,0.000000,0.000000,dz))
 
     normb_atom_type = [6,6,6,1,1,1,1,6,6,6,6,1,1,1,1]
-    print('warning, atomtype for norbornadiene hardcoded')
+    print('warning, atomtype for norbornadiene hardcoded in function cubegen')
 
     for i in np.arange(0,nucl_coord.shape[0]):
         file.write('{:5} {:11.6f} {:11.6f} {:11.6f} {:11.6f} \n'.format(normb_atom_type[i],1.000000,nucl_coord[i][0],nucl_coord[i][1],nucl_coord[i][2]))
@@ -185,6 +185,7 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data):
     target_file :: Filepath <- output cube
     '''
     n_mo, nes = 31, 8
+    print('warning, n_mo and nes hardcoded')
     tdm_file = h5.File(os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5', 'r')
     tran_den_mat = tdm_file['TDM']
     '''
@@ -198,6 +199,14 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data):
         for jes in np.arange(ies+1,nes):
             #print(ies,jes,"are the es")
             tdm = tdm+2*((wvpck_data[ies]*wvpck_data[jes].conjugate()).real)*tran_den_mat[(ies)*nes+(jes)].reshape((n_mo,n_mo))
+
+     # HERE HERE IMPLEMENT SINGLE ELEMENT
+     #ies = 0
+     #jes = 5
+     #tdm = tdm+2*((wvpck_data[ies]*wvpck_data[jes].conjugate()).real)*tran_den_mat[(ies)*nes+(jes)].reshape((n_mo,n_mo))
+
+
+
     '''
     once you computed the averaged tdm, you just need to evaluate the density
     this is a box centered in the origin 0,0,0
@@ -293,6 +302,96 @@ def give_me_stats(time, wf, threshold):
     print('{:6.2f} {:5} {:5.2f} {:5.2f} {:5.2f}%'.format(time, calc, mod_sum, norm,mod_sum/norm*100))
     return calculate_this
 
+def read_cube(filename):
+    '''
+    from cube to dictionary
+    filename :: String <- Filepath
+    '''
+    cube = {}
+    transform = np.eye(4)
+    with open(filename, 'rb') as f:
+        f.readline()
+        # Read title and grid origin
+        title = str(f.readline().decode('ascii')).strip()
+        n, xmin, ymin, zmin = f.readline().split()
+        num = int(n)
+        n, x, y, z = f.readline().split()
+        ngridx = int(n)
+        dx = float(x)
+        translate = np.array([float(x), float(y), float(z)])
+        transform[0,0] = float(x)
+        transform[1,0] = float(y)
+        transform[2,0] = float(z)
+        transform[0,3] = translate[0]
+        n, x, y, z = f.readline().split()
+        ngridy = int(n)
+        dy = float(y)
+        transform[0,1] = float(x)
+        transform[1,1] = float(y)
+        transform[2,1] = float(z)
+        transform[1,3] = translate[1]
+        n, x, y, z = f.readline().split()
+        ngridz = int(n)
+        dz = float(z)
+        transform[0,2] = float(x)
+        transform[1,2] = float(y)
+        transform[2,2] = float(z)
+        transform[2,3] = translate[2]
+        centers = []
+        for i in range(abs(num)):
+            q, _, x, y, z = str(f.readline().decode('ascii')).split()
+            centers.append({'name':'{0}'.format(i), 'Z':int(q), 'xyz':np.array([float(x), float(y), float(z)])})
+        cube['centers'] = centers
+        rest_of_lines = f.readlines()
+        list_of_list_of_floats = [ [ float(x) for x in a.split() ] for a in rest_of_lines ]
+        cube['grid'] = np.array([y for x in list_of_list_of_floats for y in x])
+        cube['transform'] = transform
+        cube['natoms'] = num
+        cube['mins'] = [float(xmin), float(ymin), float(zmin)]
+        cube['ds'] = [dx, dy, dz]
+        cube['ngrids'] = [ ngridx, ngridy, ngridz ]
+        return(cube)
+
+def cube_difference(path_cube_1, path_cube_2):
+    '''
+    From the path of two cubes, get the difference
+    '''
+    root_folder = os.path.dirname(os.path.abspath(path_cube_1))
+    label1 = os.path.splitext(path_cube_1)[0]
+    label2 = os.path.splitext(path_cube_2)[0]
+    output_name = '{}_minus_{}.cube'.format(label1,label2)
+    target_file = os.path.join(root_folder,output_name)
+    cube1 = read_cube(path_cube_1)
+    cube2 = read_cube(path_cube_2)
+    xmin, ymin, zmin = cube2['mins']
+    dx, dy, dz = cube2['ds']
+    nx, ny, nz = cube2['ngrids']
+    final_cube = cube2['grid'] - cube1['grid']
+    natoms = cube2['natoms']
+    centers = cube1['centers']
+    nucl_coord = np.zeros((natoms,3))
+    for i in range(natoms):
+        nucl_coord[i] = centers[i]['xyz']
+    cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
+    print('File {} written.'.format(target_file))
+
+
+def give_me_stats(time, wf, threshold):
+    new_one = qp.abs2(wf)
+
+    calc = 0
+    calculate_this = np.zeros((pL,gL,tL), dtype=bool)
+    mod_sum = 0
+    for p in range(pL):
+        for g in range(gL):
+            for t in range(tL):
+                if np.sum(new_one[p,g,t]) > threshold:
+                    mod_sum += np.sum(new_one[p,g,t])
+                    calc += 1
+                    calculate_this[p,g,t] = True
+    norm = np.linalg.norm(wf)
+    print('{:6.2f} {:5} {:5.2f} {:5.2f} {:5.2f}%'.format(time, calc, mod_sum, norm,mod_sum/norm*100))
+
 
 def command_line_parser():
     '''
@@ -301,6 +400,10 @@ def command_line_parser():
     parser = ArgumentParser()
     parser.add_argument("-t", "--tdm",
                     dest="t",
+                    nargs='+',
+                    help="A list of rasscf.h5 file to process")
+    parser.add_argument("-d", "--difference",
+                    dest="d",
                     nargs='+',
                     help="A list of rasscf.h5 file to process")
     parser.add_argument("-i", "--input_multigeom_mode",
@@ -330,6 +433,11 @@ def Main():
     cut_states = 8
 
     args = command_line_parser()
+
+    if args.d != None:
+        print('difference mode')
+        fn1,fn2 = args.d
+        cube_difference(fn1,fn2)
 
     if args.t != None:
         list_of_files = args.t
@@ -377,20 +485,20 @@ def Main():
             wvpck_data[state] = 1
             final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data)
             cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
-        # 0.7071 = sqrt(2)
-        thing = 0.7071
-        amplit = [(thing,thing),
-                  (thing,thing*1j),
-                  (thing,-thing),
-                  (thing,-thing*1j)]
-        for time in range(4):
-            target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_TIME_{}.cube'.format(time)
-            wvpck_data = np.zeros(8, dtype=complex)
-            wvpck_data[0] = amplit[time][0]
-            wvpck_data[6] = amplit[time][1]
-            print('This state at time {} has {}={} and {}={}'.format(time, 4, amplit[time][0], 5, amplit[time][1]))
-            final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data)
-            cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
+        ## 0.7071 = sqrt(2)
+        #thing = 0.7071
+        #amplit = [(thing,thing),
+        #          (thing,thing*1j),
+        #          (thing,-thing),
+        #          (thing,-thing*1j)]
+        #for time in range(4):
+        #    target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_TIME_{}.cube'.format(time)
+        #    wvpck_data = np.zeros(8, dtype=complex)
+        #    wvpck_data[0] = amplit[time][0]
+        #    wvpck_data[6] = amplit[time][1]
+        #    print('This state at time {} has {}={} and {}={}'.format(time, 4, amplit[time][0], 5, amplit[time][1]))
+        #    final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data)
+        #    cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
 
     if args.i != None:
         # activate folder mode
@@ -402,6 +510,7 @@ def Main():
         wf_file = h5.File(data['wf'],'r')
         wf_int = wf_file['WF']
         time = wf_file['Time'][0]
+        give_me_stats(time,wf_int,threshold)
         #wf = wf_int[13:16, 14:17, 20:23, :]
         wf = wf_int[15:-15, 15:-15, 30:-30, :]
 
