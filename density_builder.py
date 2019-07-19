@@ -185,7 +185,6 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data):
     target_file :: Filepath <- output cube
     '''
     n_mo, nes = 31, 8
-    print('warning, n_mo and nes hardcoded')
     tdm_file = h5.File(os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5', 'r')
     tran_den_mat = tdm_file['TDM']
     '''
@@ -285,22 +284,22 @@ def abs2(x):
     return x.real**2 + x.imag**2
 
 
-def give_me_stats(time, wf, threshold):
-    pL,gL,tL,_ = wf.shape
-    new_one = abs2(wf)
-    calc = 0
-    calculate_this = np.zeros((pL,gL,tL), dtype=bool)
-    mod_sum = 0
-    for p in range(pL):
-        for g in range(gL):
-            for t in range(tL):
-                if np.sum(new_one[p,g,t]) > threshold:
-                    mod_sum += np.sum(new_one[p,g,t])
-                    calc += 1
-                    calculate_this[p,g,t] = True
-    norm = np.linalg.norm(wf)
-    print('{:6.2f} {:5} {:5.2f} {:5.2f} {:5.2f}%'.format(time, calc, mod_sum, norm,mod_sum/norm*100))
-    return calculate_this
+#def give_me_stats(time, wf, threshold):
+#    pL,gL,tL,_ = wf.shape
+#    new_one = abs2(wf)
+#    calc = 0
+#    calculate_this = np.zeros((pL,gL,tL), dtype=bool)
+#    mod_sum = 0
+#    for p in range(pL):
+#        for g in range(gL):
+#            for t in range(tL):
+#                if np.sum(new_one[p,g,t]) > threshold:
+#                    mod_sum += np.sum(new_one[p,g,t])
+#                    calc += 1
+#                    calculate_this[p,g,t] = True
+#    norm = np.linalg.norm(wf)
+#    print('{:6.2f} {:5} {:5.2f} {:5.2f} {:5.2f}%'.format(time, calc, mod_sum, norm,mod_sum/norm*100))
+#    return calculate_this
 
 def read_cube(filename):
     '''
@@ -377,7 +376,8 @@ def cube_difference(path_cube_1, path_cube_2):
 
 
 def give_me_stats(time, wf, threshold):
-    new_one = abs2(wf)
+    new_one = abs2(np.asarray(wf))
+    pL, gL, tL, nstates = new_one.shape
 
     calc = 0
     calculate_this = np.zeros((pL,gL,tL), dtype=bool)
@@ -390,7 +390,8 @@ def give_me_stats(time, wf, threshold):
                     calc += 1
                     calculate_this[p,g,t] = True
     norm = np.linalg.norm(wf)
-    print('{:6.2f} {:5} {:5.2f} {:5.2f} {:5.2f}%'.format(time, calc, mod_sum, norm,mod_sum/norm*100))
+    stringZ = '\nWavefunction at {:6.2f} fs with {} Threshold:\nNumber of points: {:5}\nNorm {:5.2f}\nTotal Norm: {:5.2f}\naccuracy: {:5.2f}%\n\n'
+    print(stringZ.format(time, threshold, calc, mod_sum, norm,mod_sum/norm*100))
 
 
 def command_line_parser():
@@ -424,6 +425,7 @@ def command_line_parser():
 
 
 def Main():
+    print('warning, n_mo and nes hardcoded on function creating_cube_function_fro_nuclear_list')
     # on MAC
     # updown_file = '/Users/stephan/dox/Acu-Stephan/up_down'
 
