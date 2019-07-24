@@ -419,6 +419,10 @@ def command_line_parser():
                     dest="s",
                     type=str,
                     help="The single file path")
+    parser.add_argument("-b", "--between-file",
+                    dest="b",
+                    type=str,
+                    help="an yml file with 'Between atoms mode'")
     parser.add_argument("-w", "--wavefunction",
                     dest="w",
                     type=str,
@@ -514,9 +518,28 @@ def Main():
         #    final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data)
         #    cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
 
+    if args.b != None:
+        # we enter in between mode. This mode means that we will count only grid points in cartesian
+        # space that belongs to some rules, for which we already precalculated the index
+        # This means that we DO NOT use all the grid space.
+        yml_filename = os.path.abspath(args.b)
+        data = yaml.load(open(yml_filename,'r'))
+        num_cores = data['cores']
+        wf_file = h5.File(data['wf'],'r')
+        wf_int = wf_file['WF']
+        time = wf_file['Time'][0]
+        give_me_stats(time,wf_int,threshold)
+        #wf = wf_int[13:16, 14:17, 20:23, :]
+        wf = wf_int[15:-15, 15:-15, 30:-30, :]
+
+
+        ## new file list thing
+        h5file_folder = data['folder']
+        file_list = create_full_list_of_labels_numpy(data)
+        print(file_list)
+
     if args.i != None:
         # activate folder mode
-
         yml_filename = os.path.abspath(args.i)
         data = yaml.load(open(yml_filename,'r'))
         num_cores = data['cores']
