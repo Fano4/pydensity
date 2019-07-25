@@ -4,6 +4,7 @@ This utility reads an h5 file produced by the PWAPIC code and .wvpck files gener
 
 #import math
 import os
+import glob
 import pickle
 import sys
 from argparse import ArgumentParser
@@ -571,41 +572,47 @@ def Main():
         yml_filename = os.path.abspath(args.b)
         data = yaml.load(open(yml_filename,'r'))
         num_cores = data['cores']
-        wf_file = h5.File(data['wf'],'r')
-        wf_int = wf_file['WF']
-        time = wf_file['Time'][0]
-        threshold = data['threshold']
-        give_me_stats(time,wf_int,threshold)
-        #wf = wf_int[13:16, 14:17, 20:23, :]
-        wf = wf_int[15:-15, 15:-15, 30:-30, :]
-        print(wf.shape)
+        wf_folder = data['wf_folder']
+        files_wf = sorted(glob.glob(wf_folder + '/Gauss*.h5'))
+        for single_file_wf in files_wf[::5]:
+            print('\n\nI am doing now {}'.format(single_file_wf))
+            with h5.File(single_file_wf,'r') as wf_file:
+                wf_int = wf_file['WF']
+                time = wf_file['Time'][0]
+                threshold = data['threshold']
+                give_me_stats(time,wf_int,threshold)
+                #wf = wf_int[13:16, 14:17, 20:23, :]
+                wf = wf_int[15:-15, 15:-15, 30:-30, :]
+                print(wf.shape)
 
 
-        ## new file list thing
-        h5file_folder = data['folder']
-        file_list = create_full_list_of_labels_numpy(data)
-        sums = np.sum(abs2(wf),axis=3)
-        trues_indexes = np.where(sums>threshold)
-        wf_to_be_processed = wf[trues_indexes]
-        sums_to_be_processed = sums[trues_indexes] # I use this to weight geometries
-        file_to_be_processed = file_list[trues_indexes]
+                ## new file list thing
+                h5file_folder = data['folder']
+                file_list = create_full_list_of_labels_numpy(data)
+                sums = np.sum(abs2(wf),axis=3)
+                trues_indexes = np.where(sums>threshold)
+                wf_to_be_processed = wf[trues_indexes]
+                file_to_be_processed = file_list[trues_indexes]
+                file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed ]
 
 
-        # this here is the indexes of the cartesian grid on the indexes of the nucleus
-        file_pickle = data['first_second']
-        file_list_index = pickle.load(open(file_pickle,'rb'))['list_first']
-        reshaped_file_list_index = file_list_index.reshape(25,26,100)
-        list_indexes = reshaped_file_list_index[trues_indexes]
+                # this here is the indexes of the cartesian grid on the indexes of the nucleus
+                file_pickle = data['first_second']
+                file_list_index = pickle.load(open(file_pickle,'rb'))
+                for lab in ['list_first','list_second']:
+                    file_list_index_sub = file_list_index[lab]
+                    reshaped_file_list_index = file_list_index_sub.reshape(25,26,100)
+                    list_indexes = reshaped_file_list_index[trues_indexes]
 
-        file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed]
-        print('Using {} I will process {} files with {} cores'.format(threshold, len(file_list_abs), num_cores))
+                    print('Using {} I will process {} files with {} cores'.format(threshold, len(file_list_abs), num_cores))
 
-        # parallel version
-        inputs = tqdm(zip(wf_to_be_processed, file_list_abs, list_indexes), total=len(wf_to_be_processed))
-        a_data = Parallel(n_jobs=num_cores)(delayed(calculate_between_carbons)(single_wf, single_file, single_indexes, data) for single_wf, single_file, single_indexes in inputs)
-        print(a_data)
-        final_cube = sum(a_data)
-        print(final_cube)
+                    # parallel version
+                    inputs = tqdm(zip(wf_to_be_processed, file_list_abs, list_indexes), total=len(wf_to_be_processed))
+                    a_data = Parallel(n_jobs=num_cores)(delayed(calculate_between_carbons)(single_wf, single_file, single_indexes, data) for single_wf, single_file, single_indexes in inputs)
+                    final_sum = sum(a_data)
+                    fn = lab + '.dat'
+                    with open(fn,'a') as filZ:
+                        filZ.write('{:6.3f} {:7.4f}\n'.format(time,final_sum))
 
     if args.i != None:
         # activate folder mode
