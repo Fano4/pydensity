@@ -176,13 +176,60 @@ def get_TDM(molcas_h5file_path,updown_file,inactive,cut_states):
                 output_h5_file.close()
     molcas_h5file.close()
 
+def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
+    '''
+    This returns the electronic density summed up on all the points in between carbons
+    wvpck_data :: np.array(Double) <- the 1d singular geom multielectronic state wf.
+    molcas_h5file_path :: String <- FilePath
+    data :: Dictionary
+    indexes :: np.array(Int) <-the indexes of the FLATTEN ARRAY in the cartesian cube.
+    '''
+    n_mo, nes = 31, 8
+    tdm_file = h5.File(os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5', 'r')
+    tran_den_mat = tdm_file['TDM']
+    tdm = np.zeros((n_mo,n_mo))
+    for ies in np.arange(0,nes):
+        tdm = tdm+abs(wvpck_data[ies])**2*tran_den_mat[(ies)*nes+(ies)].reshape((n_mo,n_mo))
+        for jes in np.arange(ies+1,nes):
+            #print(ies,jes,"are the es")
+            tdm = tdm+2*((wvpck_data[ies]*wvpck_data[jes].conjugate()).real)*tran_den_mat[(ies)*nes+(jes)].reshape((n_mo,n_mo))
+
+    xmin, ymin, zmin = data['mins']
+    nx,ny,nz = data['num_points']
+    x = np.linspace(xmin,-xmin,nx)
+    y = np.linspace(ymin,-ymin,ny)
+    z = np.linspace(zmin,-zmin,nz)
+    dx = x[1]-x[0]
+    dy = y[1]-y[0]
+    dz = z[1]-z[0]
+    B,A,C = np.meshgrid(x,y,z)
+    orbital_object = Orbitals(molcas_h5file_path,'hdf5')
+    number_of_points, = indexes.shape
+    first = A.flatten()
+    second = B.flatten()
+    third = C.flatten()
+    ffirst = first[indexes]
+    ssecond = second[indexes]
+    tthird = third[indexes]
+    phii = np.empty((n_mo,number_of_points))
+
+    for i in range(n_mo):
+        # the mo method calculates the MO given space orbitals
+        phii[i,:] = orbital_object.mo(i,first[indexes],second[indexes],third[indexes])
+
+    cube_array = np.zeros(number_of_points)
+    for i in range(n_mo):
+        for j in range(n_mo):
+            cube_array += phii[i] * phii[j] * tdm[i,j]
+    return np.sum(cube_array)
+
 
 
 def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data):
     '''
+    It returns the cube at this geometry.
     wvpck_data :: np.array(Double) <- the 1d singular geom multielectronic state wf.
-    return_tuple :: Tuple <- all the rest of the data needed for the cube creation
-    target_file :: Filepath <- output cube
+    data :: Dictionary
     '''
     n_mo, nes = 31, 8
     tdm_file = h5.File(os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5', 'r')
@@ -205,11 +252,11 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data):
      #tdm = tdm+2*((wvpck_data[ies]*wvpck_data[jes].conjugate()).real)*tran_den_mat[(ies)*nes+(jes)].reshape((n_mo,n_mo))
 
 
-
     '''
     once you computed the averaged tdm, you just need to evaluate the density
     this is a box centered in the origin 0,0,0
     '''
+
     xmin, ymin, zmin = data['mins']
     nx,ny,nz = data['num_points']
     x = np.linspace(xmin,-xmin,nx)
@@ -284,23 +331,6 @@ def abs2(x):
     return x.real**2 + x.imag**2
 
 
-#def give_me_stats(time, wf, threshold):
-#    pL,gL,tL,_ = wf.shape
-#    new_one = abs2(wf)
-#    calc = 0
-#    calculate_this = np.zeros((pL,gL,tL), dtype=bool)
-#    mod_sum = 0
-#    for p in range(pL):
-#        for g in range(gL):
-#            for t in range(tL):
-#                if np.sum(new_one[p,g,t]) > threshold:
-#                    mod_sum += np.sum(new_one[p,g,t])
-#                    calc += 1
-#                    calculate_this[p,g,t] = True
-#    norm = np.linalg.norm(wf)
-#    print('{:6.2f} {:5} {:5.2f} {:5.2f} {:5.2f}%'.format(time, calc, mod_sum, norm,mod_sum/norm*100))
-#    return calculate_this
-
 def read_cube(filename):
     '''
     from cube to dictionary
@@ -350,6 +380,15 @@ def read_cube(filename):
         cube['ds'] = [dx, dy, dz]
         cube['ngrids'] = [ ngridx, ngridy, ngridz ]
         return(cube)
+
+def cube_sum_grid_points(path_cube):
+    '''
+    From the path of one cube, sum up all the elements
+    '''
+    cube = read_cube(path_cube)
+    grid_points = cube['grid']
+    print('The sum on this cube is {}.'.format(sum(grid_points)))
+
 
 def cube_difference(path_cube_1, path_cube_2):
     '''
@@ -427,6 +466,10 @@ def command_line_parser():
                     dest="w",
                     type=str,
                     help="Wavefunction stats")
+    parser.add_argument("-n", "--norm_cube",
+                    dest="n",
+                    type=str,
+                    help="This is to calculate the sum into a cube")
     if len(sys.argv) == 1:
         parser.print_help()
     return parser.parse_args()
@@ -443,6 +486,9 @@ def Main():
     cut_states = 8
 
     args = command_line_parser()
+
+    if args.n != None:
+        cube_sum_grid_points(args.n)
 
     if args.w != None:
         print('Waveunction stats mode')
@@ -528,15 +574,38 @@ def Main():
         wf_file = h5.File(data['wf'],'r')
         wf_int = wf_file['WF']
         time = wf_file['Time'][0]
+        threshold = data['threshold']
         give_me_stats(time,wf_int,threshold)
         #wf = wf_int[13:16, 14:17, 20:23, :]
         wf = wf_int[15:-15, 15:-15, 30:-30, :]
+        print(wf.shape)
 
 
         ## new file list thing
         h5file_folder = data['folder']
         file_list = create_full_list_of_labels_numpy(data)
-        print(file_list)
+        sums = np.sum(abs2(wf),axis=3)
+        trues_indexes = np.where(sums>threshold)
+        wf_to_be_processed = wf[trues_indexes]
+        sums_to_be_processed = sums[trues_indexes] # I use this to weight geometries
+        file_to_be_processed = file_list[trues_indexes]
+
+
+        # this here is the indexes of the cartesian grid on the indexes of the nucleus
+        file_pickle = data['first_second']
+        file_list_index = pickle.load(open(file_pickle,'rb'))['list_first']
+        reshaped_file_list_index = file_list_index.reshape(25,26,100)
+        list_indexes = reshaped_file_list_index[trues_indexes]
+
+        file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed]
+        print('Using {} I will process {} files with {} cores'.format(threshold, len(file_list_abs), num_cores))
+
+        # parallel version
+        inputs = tqdm(zip(wf_to_be_processed, file_list_abs, list_indexes), total=len(wf_to_be_processed))
+        a_data = Parallel(n_jobs=num_cores)(delayed(calculate_between_carbons)(single_wf, single_file, single_indexes, data) for single_wf, single_file, single_indexes in inputs)
+        print(a_data)
+        final_cube = sum(a_data)
+        print(final_cube)
 
     if args.i != None:
         # activate folder mode
