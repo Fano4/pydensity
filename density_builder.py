@@ -574,7 +574,8 @@ def Main():
         num_cores = data['cores']
         wf_folder = data['wf_folder']
         files_wf = sorted(glob.glob(wf_folder + '/Gauss*.h5'))
-        for single_file_wf in files_wf[::5]:
+        one_every = 5
+        for single_file_wf in files_wf[::one_every]:
             print('\n\nI am doing now {}'.format(single_file_wf))
             with h5.File(single_file_wf,'r') as wf_file:
                 wf_int = wf_file['WF']
