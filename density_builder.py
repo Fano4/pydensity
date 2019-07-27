@@ -388,7 +388,9 @@ def cube_sum_grid_points(path_cube):
     '''
     cube = read_cube(path_cube)
     grid_points = cube['grid']
-    print('The sum on this cube is {}.'.format(sum(grid_points)))
+    dx,dy,dz = cube['ds']
+    differential = dx * dy * dz
+    print('The sum on this cube is {}.'.format(sum(grid_points)*differential))
 
 
 def cube_difference(path_cube_1, path_cube_2):
@@ -574,7 +576,7 @@ def Main():
         num_cores = data['cores']
         wf_folder = data['wf_folder']
         files_wf = sorted(glob.glob(wf_folder + '/Gauss*.h5'))
-        one_every = 5
+        one_every = data['one_every']
         for single_file_wf in files_wf[::one_every]:
             print('\n\nI am doing now {}'.format(single_file_wf))
             with h5.File(single_file_wf,'r') as wf_file:
