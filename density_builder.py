@@ -546,7 +546,8 @@ def Main():
         '''
 
         # 8 is electronic states
-        for state in range(8):
+        #for state in range(8):
+        for state in range(1):
             target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_S{}.cube'.format(state)
             wvpck_data = np.zeros(8)
             wvpck_data[state] = 1

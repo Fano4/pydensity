@@ -1148,8 +1148,10 @@ class Orbitals(object):
       f.write('\n')
 
 if __name__ == "__main__" :
-    file_name = '/home/alessio/config/Stephan/zNorbornadiene_P000-000_P017-136_P114-766.rasscf.h5'
-    a = Orbitals(file_name, 'hdf5')
+    #file_name = '/home/alessio/config/Stephan/zNorbornadiene_P000-000_P017-136_P114-766.rasscf.h5'
+    file_name = '/home/alessio/Desktop/Dropbox/Acu-Elisa/new.molden'
+    #file_name = '/home/alessio/Desktop/Dropbox/Acu-Elisa/a-OpenForm.rasscf.molden'
+    a = Orbitals(file_name, 'molden')
     single = a.mo(0,np.array([-10.0]),np.array([-10.0]),np.array([-10.0]))
     print(single)
 
