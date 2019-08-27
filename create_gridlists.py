@@ -7,15 +7,16 @@ import quantumpropagator as qp
 from tqdm import tqdm
 
 
-def points_in_cylinder(pt1, pt2, r, q):
+def points_in_cylinder(pt1, pt2, r, q, cyl_shrink):
     '''
     given a 1d vector of points q, returns a boolean telling if the point is into the
-    cylinder defined by the two points pt1 and pt2 and ray r.
+    cylinder defined by the two points pt1 and pt2 and radius r.
+    cyl_shrink is the distance between the two atoms at which the cylinder starts
     '''
     vec = pt2 - pt1
     const = r * np.linalg.norm(vec)
-    boolean1 = np.dot(q - pt1, vec) >= 0
-    boolean2 = np.dot(q - pt2, vec) <= 0
+    boolean1 = np.dot(q - pt1, vec) >= cyl_shrink
+    boolean2 = np.dot(q - pt2, vec) <= cyl_shrink
     boolean3 = np.linalg.norm(np.cross(q - pt1, vec), axis=1) <= const
     return boolean1*boolean2*boolean3
 
@@ -26,7 +27,10 @@ def main(geoms):
     due = 9
     tre = 8
     qua = 7
+
     r = 0.6
+    cyl_shrink = 0.6
+
     xmin, ymin, zmin = -10,-10,-10
     nx, ny, nz = 64,64,64
     x = np.linspace(xmin,-xmin,nx)
@@ -52,14 +56,14 @@ def main(geoms):
                 pt2 = single[due]
                 pt3 = single[tre]
                 pt4 = single[qua]
-                a = np.where(points_in_cylinder(pt1, pt2, r, list_of_points_in_3d))
-                b = np.where(points_in_cylinder(pt3, pt4, r, list_of_points_in_3d))
-                c = np.where(points_in_cylinder(pt1, pt4, r, list_of_points_in_3d))
-                d = np.where(points_in_cylinder(pt2, pt3, r, list_of_points_in_3d))
+                a = np.where(points_in_cylinder(pt1, pt2, r, list_of_points_in_3d, cyl_shrink))
+                b = np.where(points_in_cylinder(pt3, pt4, r, list_of_points_in_3d, cyl_shrink))
+                c = np.where(points_in_cylinder(pt1, pt4, r, list_of_points_in_3d, cyl_shrink))
+                d = np.where(points_in_cylinder(pt2, pt3, r, list_of_points_in_3d, cyl_shrink))
 
                 list_first[counter] = np.concatenate((a[0],b[0]))
                 list_second[counter] = np.concatenate((c[0],d[0]))
-                if counter % 1000000 == 'alle': # one each 1000
+                if counter % 1000000 == 'aalle': # one each 1000 (I do not want this to trigger)
                     first_thing = qp.fromBohToAng(np.concatenate((list_of_points_in_3d[a],list_of_points_in_3d[b])))
                     second_thing = qp.fromBohToAng(np.concatenate((list_of_points_in_3d[c],list_of_points_in_3d[d])))
                     qp.saveTraj(np.array([single]),['C','C','C','H','H','H','H','C','C','C','C','H','H','H','H'], '{}'.format(counter),convert=True)
