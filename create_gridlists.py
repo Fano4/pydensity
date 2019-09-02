@@ -49,18 +49,36 @@ def read_single_arguments():
     d = 'This script will launch a Grid quantum propagation'
     parser = ArgumentParser(description=d)
 
-    parser.add_argument('-l','--list',
+    parser.add_argument('-g','--geometrypickle',
+                        type=str,
+                        required=True,
+                        help='the path of geom.p pickle file',
+                        )
+    parser.add_argument('-p','--parameters',
                         nargs='+',
                         required=True,
                         help='3 numbers: r_c, r_s, shrink. they have to be in BOHR',
                         )
     args = parser.parse_args()
+    print(args)
 
     return args
 
 
-def main(geoms):
+def main():
     args = read_single_arguments()
+
+    geom_file = args.geometrypickle
+    geoms = qp.pickleLoad(geom_file)
+    print('File {} loaded...'.format(geom_file))
+
+    # this should raise up error when there are not 3 values.
+
+    r_c, r_s, cyl_shrink = [ float(x) for x in args.parameters ]
+
+    #r_c = 0.6 # BOHR
+    #r_s = 0.6 # BOHR
+    #cyl_shrink = 0.0 # BOHR
 
     pL, gL, tL, atomN, _ = geoms.shape
     print('\nPhi: {}\nGamma: {}\nTheta: {}\nTotal points: {}\n'.format(pL, gL, tL, pL*gL*tL))
@@ -68,13 +86,6 @@ def main(geoms):
     due = 9
     tre = 8
     qua = 7
-
-    # this should raise up error when there are not 3 values.
-    r_c, r_s, cyl_shrink = args.a
-
-    #r_c = 0.6 # BOHR
-    #r_s = 0.6 # BOHR
-    #cyl_shrink = 0.0 # BOHR
 
     xmin, ymin, zmin = -10,-10,-10
     nx, ny, nz = 64,64,64
@@ -151,17 +162,18 @@ def main(geoms):
 
 
 if __name__ == "__main__":
-    geom_file = '/home/users/alessioval/densities/between_carbon/geoms.p'
-    if os.path.isfile(geom_file):
-        geoms = qp.pickleLoad(geom_file)
-        print('File {} loaded...'.format(geom_file))
-    else:
-        fold = '/home/users/alessioval/x-May-2019/initialData'
-        fn1 = 'datanewoneWithNACnow.npy'
-        file_path = os.path.join(fold,fn1)
-        data = np.load(file_path)
-        dictionary = data[()]
-        geoms = dictionary['geoCUBE']
-        qp.pickleSave(geom_file,geoms)
-        print('File {} written...'.format(geom_file))
-    main(geoms)
+    #geom_file = '/home/users/alessioval/densities/between_carbon/geoms.p'
+    #if os.path.isfile(geom_file):
+    #    geoms = qp.pickleLoad(geom_file)
+    #    print('File {} loaded...'.format(geom_file))
+    #else:
+    #    fold = '/home/users/alessioval/x-May-2019/initialData'
+    #    fn1 = 'datanewoneWithNACnow.npy'
+    #    file_path = os.path.join(fold,fn1)
+    #    data = np.load(file_path)
+    #    dictionary = data[()]
+    #    geoms = dictionary['geoCUBE']
+    #    qp.pickleSave(geom_file,geoms)
+    #    print('File {} written...'.format(geom_file))
+    #main(geoms)
+    main()
