@@ -222,14 +222,12 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
     # HERE HERE
     if 'take_core_out' in data:
 
-        print('I will take into accout only ACTIVE SPACE')
         for i in range(n_core,n_mo):
             for j in range(n_core,n_mo):
                 cube_array += phii[i] * phii[j] * tdm[i,j]
 
     else:
 
-        print('I will take into accout all MOs')
         for i in range(n_mo):
             for j in range(n_mo):
                 cube_array += phii[i] * phii[j] * tdm[i,j]
@@ -589,6 +587,8 @@ def Main():
         num_cores = data['cores']
         wf_folder = data['wf_folder']
         files_wf = sorted(glob.glob(wf_folder + '/Gauss*.h5'))
+        if 'take_core_out' in data:
+            print("I will take into account only ACTIVE SPACE")
         if 'one_every' in data:
             one_every = data['one_every']
         else:
