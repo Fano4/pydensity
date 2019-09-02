@@ -185,7 +185,7 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
     data :: Dictionary
     indexes :: np.array(Int) <-the indexes of the FLATTEN ARRAY in the cartesian cube.
     '''
-    n_mo, nes = 31, 8
+    n_mo, nes, n_core = 31, 8, 22
     tdm_file = h5.File(os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5', 'r')
     tran_den_mat = tdm_file['TDM']
     tdm = np.zeros((n_mo,n_mo))
@@ -219,9 +219,21 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
         phii[i,:] = orbital_object.mo(i,first[indexes],second[indexes],third[indexes])
 
     cube_array = np.zeros(number_of_points)
-    for i in range(n_mo):
-        for j in range(n_mo):
-            cube_array += phii[i] * phii[j] * tdm[i,j]
+    # HERE HERE
+    if 'take_core_out' in data:
+
+        print('I will take into accout only ACTIVE SPACE')
+        for i in range(n_core,n_mo):
+            for j in range(n_core,n_mo):
+                cube_array += phii[i] * phii[j] * tdm[i,j]
+
+    else:
+
+        print('I will take into accout all MOs')
+        for i in range(n_mo):
+            for j in range(n_mo):
+                cube_array += phii[i] * phii[j] * tdm[i,j]
+
     return np.sum(cube_array) * (dx*dy*dz)
 
 
