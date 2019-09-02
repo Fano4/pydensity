@@ -153,7 +153,7 @@ def main():
     dic2['list_2'] = list_2
     dic2['list_3'] = list_3
     dic2['list_4'] = list_4
-    name_final_pickle = 'r_c-{}-r_s-cs-{}-list.p'.format(r_c,r_s,cyl_shrink)
+    name_final_pickle = 'r_c-{}-r_s-{}-cs-{}-list.p'.format(r_c,r_s,cyl_shrink)
     qp.pickleSave(name_final_pickle, dic2)
 
     # this file now contains two lists. Each one of those is 65000 long. In each of those 65000 there is a list of grid points in the flattened list. 
