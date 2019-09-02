@@ -222,7 +222,7 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
     for i in range(n_mo):
         for j in range(n_mo):
             cube_array += phii[i] * phii[j] * tdm[i,j]
-    return np.sum(cube_array)
+    return np.sum(cube_array) * (dx*dy*dz)
 
 
 
@@ -606,7 +606,7 @@ def Main():
                 # this here is the indexes of the cartesian grid on the indexes of the nucleus
                 file_pickle = data['first_second']
                 file_list_index = pickle.load(open(file_pickle,'rb'))
-                for lab in ['list_first','list_second']:
+                for lab in file_list_index:
                     file_list_index_sub = file_list_index[lab]
                     reshaped_file_list_index = file_list_index_sub.reshape(25,26,100)
                     list_indexes = reshaped_file_list_index[trues_indexes]

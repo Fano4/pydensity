@@ -48,8 +48,8 @@ def main(geoms):
     tre = 8
     qua = 7
 
-    r = 1.0 # BOHR
-    cyl_shrink = 1.0 # BOHR
+    r = 0.6 # BOHR
+    cyl_shrink = 0.6 # BOHR
 
     xmin, ymin, zmin = -10,-10,-10
     nx, ny, nz = 64,64,64
