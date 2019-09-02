@@ -5,6 +5,7 @@ import numpy as np
 import os
 import quantumpropagator as qp
 from tqdm import tqdm
+from argparse import ArgumentParser
 
 def points_in_sphere(pt1, r, q):
     '''
@@ -40,7 +41,27 @@ def points_in_cylinder(pt1, pt2, r, q, cyl_shrink):
 
     return boolean1*boolean2*boolean3
 
+def read_single_arguments():
+    '''
+    This funcion reads the command line arguments and assign the values on
+    the namedTuple for the 3D grid propagator.
+    '''
+    d = 'This script will launch a Grid quantum propagation'
+    parser = ArgumentParser(description=d)
+
+    parser.add_argument('-l','--list',
+                        nargs='+',
+                        required=True,
+                        help='3 numbers: r_c, r_s, shrink. they have to be in BOHR',
+                        )
+    args = parser.parse_args()
+
+    return args
+
+
 def main(geoms):
+    args = read_single_arguments()
+
     pL, gL, tL, atomN, _ = geoms.shape
     print('\nPhi: {}\nGamma: {}\nTheta: {}\nTotal points: {}\n'.format(pL, gL, tL, pL*gL*tL))
     uno = 10
@@ -48,8 +69,12 @@ def main(geoms):
     tre = 8
     qua = 7
 
-    r = 0.6 # BOHR
-    cyl_shrink = 0.6 # BOHR
+    # this should raise up error when there are not 3 values.
+    r_c, r_s, cyl_shrink = args.a
+
+    #r_c = 0.6 # BOHR
+    #r_s = 0.6 # BOHR
+    #cyl_shrink = 0.0 # BOHR
 
     xmin, ymin, zmin = -10,-10,-10
     nx, ny, nz = 64,64,64
@@ -78,12 +103,12 @@ def main(geoms):
                 pt2 = single[due]
                 pt3 = single[tre]
                 pt4 = single[qua]
-                a = np.where(points_in_cylinder(pt1, pt2, r, list_of_points_in_3d, cyl_shrink))
-                b = np.where(points_in_cylinder(pt3, pt4, r, list_of_points_in_3d, cyl_shrink))
-                c = np.where(points_in_cylinder(pt1, pt4, r, list_of_points_in_3d, cyl_shrink))
-                d = np.where(points_in_cylinder(pt2, pt3, r, list_of_points_in_3d, cyl_shrink))
-                e = np.where(points_in_sphere(pt1, r, list_of_points_in_3d))
-                f = np.where(points_in_sphere(pt2, r, list_of_points_in_3d))
+                a = np.where(points_in_cylinder(pt1, pt2, r_c, list_of_points_in_3d, cyl_shrink))
+                b = np.where(points_in_cylinder(pt3, pt4, r_c, list_of_points_in_3d, cyl_shrink))
+                c = np.where(points_in_cylinder(pt1, pt4, r_c, list_of_points_in_3d, cyl_shrink))
+                d = np.where(points_in_cylinder(pt2, pt3, r_c, list_of_points_in_3d, cyl_shrink))
+                e = np.where(points_in_sphere(pt1, r_s, list_of_points_in_3d))
+                f = np.where(points_in_sphere(pt2, r_s, list_of_points_in_3d))
 
                 list_1[counter] = np.concatenate((a[0],b[0]))
                 list_2[counter] = np.concatenate((c[0],d[0]))
@@ -117,8 +142,11 @@ def main(geoms):
     dic2['list_2'] = list_2
     dic2['list_3'] = list_3
     dic2['list_4'] = list_4
-    qp.pickleSave('first_second.p',dic2)
+    name_final_pickle = 'r_c-{}-r_s-cs-{}-list.p'.format(r_c,r_s,cyl_shrink)
+    qp.pickleSave(name_final_pickle, dic2)
+
     # this file now contains two lists. Each one of those is 65000 long. In each of those 65000 there is a list of grid points in the flattened list. 
+
     # We need to pass those grid points to the routine of density, so we can sum up...
 
 

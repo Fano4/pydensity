@@ -11,5 +11,5 @@ ext = Extension("spherical_util",
 
 setup(name="density_builder",
       install_requires=['h5py', 'numpy', 'joblib', 'fortranformat', 'tqdm'],
-      scripts=['density_builder.py'],
+      scripts=['density_builder.py', 'create_gridlists.py'],
       ext_modules=cythonize(ext))
