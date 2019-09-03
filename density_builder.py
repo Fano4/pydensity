@@ -588,7 +588,7 @@ def Main():
         wf_folder = data['wf_folder']
         files_wf = sorted(glob.glob(wf_folder + '/Gauss*.h5'))
         if 'take_core_out' in data:
-            print("I will take into account only ACTIVE SPACE")
+            print("\nI will take into account only ACTIVE SPACE\n")
         if 'one_every' in data:
             one_every = data['one_every']
         else:
