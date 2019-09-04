@@ -185,7 +185,7 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
     data :: Dictionary
     indexes :: np.array(Int) <-the indexes of the FLATTEN ARRAY in the cartesian cube.
     '''
-    n_mo, nes, n_core = 31, 8, 22
+    n_mo, nes, n_core = 31, 8, 23
     tdm_file = h5.File(os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5', 'r')
     tran_den_mat = tdm_file['TDM']
     tdm = np.zeros((n_mo,n_mo))
@@ -236,13 +236,13 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
 
 
 
-def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data):
+def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,take_only_active=None):
     '''
     It returns the cube at this geometry.
     wvpck_data :: np.array(Double) <- the 1d singular geom multielectronic state wf.
     data :: Dictionary
     '''
-    n_mo, nes = 31, 8
+    n_mo, nes, n_core = 31, 8, 23
     tdm_file = h5.File(os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5', 'r')
     tran_den_mat = tdm_file['TDM']
     '''
@@ -284,9 +284,19 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data):
         phii[i,:] = orbital_object.mo(i,A.flatten(),B.flatten(),C.flatten())
 
     cube_array = np.zeros(nx*ny*nz)
-    for i in range(n_mo):
-        for j in range(n_mo):
-            cube_array += phii[i] * phii[j] * tdm[i,j]
+    take_only_active = take_only_active or False
+    if take_only_active:
+
+        for i in range(n_core,n_mo):
+            for j in range(n_core,n_mo):
+                cube_array += phii[i] * phii[j] * tdm[i,j]
+
+    else:
+
+        for i in range(n_mo):
+            for j in range(n_mo):
+                cube_array += phii[i] * phii[j] * tdm[i,j]
+
     return cube_array
 
 
@@ -451,14 +461,17 @@ def command_line_parser():
     this function deals with command line commands
     '''
     parser = ArgumentParser()
+    parser.add_argument("-a", "--active",
+                    action="store_true", default=False,
+                    help="in single mode, switch active or all")
     parser.add_argument("-t", "--tdm",
                     dest="t",
                     nargs='+',
-                    help="A list of rasscf.h5 file to process")
+                    help="A list of rasscf.h5 file to process to create the TDM.")
     parser.add_argument("-d", "--difference",
                     dest="d",
                     nargs='+',
-                    help="A list of rasscf.h5 file to process")
+                    help="Two files for which you want the differences")
     parser.add_argument("-i", "--input_multigeom_mode",
                     dest="i",
                     type=str,
@@ -536,7 +549,7 @@ def Main():
         single_file_data = get_TDM(molcas_h5file_path,updown_file,inactive,cut_states)
 
         data = { 'mins' : [-10.0,-10.0,-10.0],
-                 'num_points' : [64,64,64]}
+                 'num_points' : [100,100,100]}
 
         xmin, ymin, zmin = data['mins']
         nx, ny, nz = data['num_points']
@@ -561,7 +574,7 @@ def Main():
             target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_S{}.cube'.format(state)
             wvpck_data = np.zeros(8)
             wvpck_data[state] = 1
-            final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data)
+            final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,args.active)
             cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
         ## 0.7071 = sqrt(2)
         #thing = 0.7071
