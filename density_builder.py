@@ -220,7 +220,7 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
 
     cube_array = np.zeros(number_of_points)
     # HERE HERE
-    if 'take_core_out' in data:
+    if data['take_core_out']:
 
         for i in range(n_core,n_mo):
             for j in range(n_core,n_mo):
@@ -251,6 +251,8 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,t
     '''
     tdm = np.zeros((n_mo,n_mo))
 
+    print('\n1) Calculating tdm')
+
     for ies in np.arange(0,nes):
         tdm = tdm+abs(wvpck_data[ies])**2*tran_den_mat[(ies)*nes+(ies)].reshape((n_mo,n_mo))
         for jes in np.arange(ies+1,nes):
@@ -279,12 +281,19 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,t
     B,A,C = np.meshgrid(x,y,z)
     phii = np.empty((n_mo,nx*ny*nz))
     orbital_object = Orbitals(molcas_h5file_path,'hdf5')
-    for i in range(n_mo):
+
+    print('2) Calculating MO')
+
+    for i in tqdm(range(n_mo)):
         # the mo method calculates the MO given space orbitals
         phii[i,:] = orbital_object.mo(i,A.flatten(),B.flatten(),C.flatten())
 
     cube_array = np.zeros(nx*ny*nz)
+
     take_only_active = take_only_active or False
+
+    print('3) Calculating density\n')
+
     if take_only_active:
 
         for i in range(n_core,n_mo):
@@ -549,7 +558,8 @@ def Main():
         single_file_data = get_TDM(molcas_h5file_path,updown_file,inactive,cut_states)
 
         data = { 'mins' : [-10.0,-10.0,-10.0],
-                 'num_points' : [100,100,100]}
+                 #'num_points' : [100,100,100]}
+                 'num_points' : [64,64,64]}
 
         xmin, ymin, zmin = data['mins']
         nx, ny, nz = data['num_points']
@@ -569,8 +579,8 @@ def Main():
         '''
 
         # 8 is electronic states
-        #for state in range(8):
-        for state in range(1):
+        for state in range(8):
+        #for state in range(1):
             target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_S{}.cube'.format(state)
             wvpck_data = np.zeros(8)
             wvpck_data[state] = 1
@@ -600,7 +610,7 @@ def Main():
         num_cores = data['cores']
         wf_folder = data['wf_folder']
         files_wf = sorted(glob.glob(wf_folder + '/Gauss*.h5'))
-        if 'take_core_out' in data:
+        if data['take_core_out']:
             print("\nI will take into account only ACTIVE SPACE\n")
         if 'one_every' in data:
             one_every = data['one_every']
