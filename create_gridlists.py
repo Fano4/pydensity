@@ -82,6 +82,7 @@ def main():
 
     pL, gL, tL, atomN, _ = geoms.shape
     print('\nPhi: {}\nGamma: {}\nTheta: {}\nTotal points: {}\n'.format(pL, gL, tL, pL*gL*tL))
+    # remember that atom numeration starts from 0 here
     uno = 10
     due = 9
     tre = 8
@@ -121,12 +122,12 @@ def main():
                 e = np.where(points_in_sphere(pt1, r_s, list_of_points_in_3d))
                 f = np.where(points_in_sphere(pt2, r_s, list_of_points_in_3d))
 
-                list_1[counter] = np.concatenate((a[0],b[0]))
-                list_2[counter] = np.concatenate((c[0],d[0]))
+                list_1[counter] = np.concatenate((a[0],b[0])) # single
+                list_2[counter] = np.concatenate((c[0],d[0])) # double
                 list_3[counter] = e[0]
                 list_4[counter] = f[0]
 
-                if counter % 1000000 == 10: # one each 1000 (I do not want this to trigger)
+                if counter % 1000000 == 30000: # one each 1000 (I do not want this to trigger)
                     first_thing = qp.fromBohToAng(np.concatenate((list_of_points_in_3d[a],list_of_points_in_3d[b])))
                     second_thing = qp.fromBohToAng(np.concatenate((list_of_points_in_3d[c],list_of_points_in_3d[d])))
                     fourth_thing = qp.fromBohToAng(list_of_points_in_3d[e])

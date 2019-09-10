@@ -413,13 +413,68 @@ def read_cube(filename):
 
 def cube_sum_grid_points(path_cube):
     '''
-    From the path of one cube, sum up all the elements
+    From the path of one cube, sum up all the elements (calculate the norm)
     '''
     cube = read_cube(path_cube)
     grid_points = cube['grid']
     dx,dy,dz = cube['ds']
     differential = dx * dy * dz
     print('The sum on this cube is {}.'.format(sum(grid_points)*differential))
+
+def cube_single_bonds(path_cube, r_c, r_s, cyl_shrink):
+    '''
+    It calculates the single geometry "in between bonds"
+    path_cube :: String <- filepath
+    r_c :: double <- radius of cylinder
+    r_s :: double <- radius of sphere
+    cyl_shrink :: double <- distance between atom and cylinder
+    '''
+    from create_gridlists import points_in_cylinder, points_in_sphere
+    cube = read_cube(path_cube)
+    dx,dy,dz = cube['ds']
+    differential = dx * dy * dz
+    geom = np.vstack([ x['xyz'] for x in cube['centers'] ])
+    print(cube.keys())
+    print('\nWarning, function cube_single_bonds is SEVERLY hardcoded\n')
+    uno = 10
+    due = 9
+    tre = 8
+    qua = 7
+
+    xmin, ymin, zmin = -10,-10,-10
+    nx, ny, nz = 64,64,64
+    x = np.linspace(xmin,-xmin,nx)
+    y = np.linspace(ymin,-ymin,ny)
+    z = np.linspace(zmin,-zmin,nz)
+    dx = x[1]-x[0]
+    dy = y[1]-y[0]
+    dz = z[1]-z[0]
+
+    B,A,C = np.meshgrid(x,y,z)
+    list_of_points_in_3d = np.stack([A.flatten(),B.flatten(),C.flatten()]).T
+
+    pt1 = geom[uno]
+    pt2 = geom[due]
+    pt3 = geom[tre]
+    pt4 = geom[qua]
+    a = np.where(points_in_cylinder(pt1, pt2, r_c, list_of_points_in_3d, cyl_shrink))
+    b = np.where(points_in_cylinder(pt3, pt4, r_c, list_of_points_in_3d, cyl_shrink))
+    c = np.where(points_in_cylinder(pt1, pt4, r_c, list_of_points_in_3d, cyl_shrink))
+    d = np.where(points_in_cylinder(pt2, pt3, r_c, list_of_points_in_3d, cyl_shrink))
+    e = np.where(points_in_sphere(pt1, r_s, list_of_points_in_3d))
+    f = np.where(points_in_sphere(pt2, r_s, list_of_points_in_3d))
+
+    list_1 = np.concatenate((a[0],b[0])) # single
+    list_2 = np.concatenate((c[0],d[0])) # double
+    list_3 = e[0]
+    list_4 = f[0]
+
+    cube_values = cube['grid']
+    value_1 = sum(cube_values[list_1])*differential
+    value_2 = sum(cube_values[list_2])*differential
+    value_3 = sum(cube_values[list_3])*differential
+    value_4 = sum(cube_values[list_4])*differential
+    print('{} {} {} {}'.format(value_1,value_2,value_3,value_4))
 
 
 def cube_difference(path_cube_1, path_cube_2):
@@ -504,7 +559,12 @@ def command_line_parser():
     parser.add_argument("-n", "--norm_cube",
                     dest="n",
                     type=str,
-                    help="This is to calculate the sum into a cube")
+                    help="This is to calculate the sum into a cube. if followed by pickle bond file, calculates the norm into bonds subgrids")
+    parser.add_argument("-p", "--singlebetween",
+                    dest="p",
+                    nargs='+',
+                    type=str,
+                    help="This is the in between bonds for single geometry. It is the CUBE file followed by the three parameters, r_c, r_s, cyl_shrink")
     if len(sys.argv) == 1:
         parser.print_help()
     return parser.parse_args()
@@ -521,6 +581,10 @@ def Main():
     cut_states = 8
 
     args = command_line_parser()
+
+    if args.p != None:
+        cube_file, r_c, r_s, cyl_shrink = args.p[0], float(args.p[1]), float(args.p[2]), float(args.p[3])
+        cube_single_bonds(cube_file, r_c, r_s, cyl_shrink)
 
     if args.n != None:
         cube_sum_grid_points(args.n)
@@ -581,10 +645,15 @@ def Main():
         # 8 is electronic states
         for state in range(8):
         #for state in range(1):
-            target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_S{}.cube'.format(state)
             wvpck_data = np.zeros(8)
             wvpck_data[state] = 1
-            final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,args.active)
+            if args.active:
+                final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,True)
+                target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_ACTIVE_S{}.cube'.format(state)
+            else:
+                final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,False)
+                target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_S{}.cube'.format(state)
+
             cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
         ## 0.7071 = sqrt(2)
         #thing = 0.7071
