@@ -20,6 +20,37 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 from orbitals_molcas import Orbitals
 
+def fromBohToAng(n):
+    ''' From Bohr to Angstrom conversion - n :: Double '''
+    return (n * 0.529177249)
+
+def saveTraj(arrayTraj, labels, filename, convert=None):
+    '''
+    given a numpy array of multiple coordinates, it prints the concatenated xyz file
+    arrayTraj :: np.array(ncoord,natom,3)    <- the coordinates
+    labels :: [String] <- ['C', 'H', 'Cl']
+    filename :: String <- filepath
+    convert :: Bool <- it tells if you need to convert from Boh to Ang (default True)
+    '''
+    convert = convert or False
+    (ncoord,natom,_) = arrayTraj.shape
+    fn = filename + '.xyz'
+    string = ''
+    for geo in range(ncoord):
+        string += str(natom) + '\n\n'
+        for i in range(natom):
+            if convert:
+                string += "   ".join([labels[i]] +
+                        ['{:10.6f}'.format(fromBohToAng(num)) for num
+                    in arrayTraj[geo,i]]) + '\n'
+            else:
+                string += "   ".join([labels[i]] +
+                        ['{:10.6f}'.format(num) for num
+                    in arrayTraj[geo,i]]) + '\n'
+
+    with open(fn, "w") as myfile:
+        myfile.write(string)
+
 
 def cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,filename,array_val,nucl_coord):
     file=open(filename,"w")
@@ -421,6 +452,55 @@ def cube_sum_grid_points(path_cube):
     differential = dx * dy * dz
     print('The sum on this cube is {}.'.format(sum(grid_points)*differential))
 
+def vmd_scriptString():
+    return '''
+display projection Orthographic
+display depthcue off
+color Display Background white
+axes location Off
+
+mol addrep 0
+mol new {{{}.xyz}} type {{xyz}} first 0 last -1 step 1 waitfor 1
+mol modcolor 0 0 ColorID 16
+mol modstyle 0 0 Licorice 0.0200000 10.000000 10.000000
+
+mol addrep 0
+mol new {{{}.xyz}} type {{xyz}} first 0 last -1 step 1 waitfor 1
+mol modcolor 0 1 ColorID 0
+mol modstyle 0 1 VDW 0.020000 12.000000
+
+mol addrep 0
+mol new {{{}.xyz}} type {{xyz}} first 0 last -1 step 1 waitfor 1
+mol modcolor 0 2 ColorID 1
+mol modstyle 0 2 VDW 0.020000 12.000000
+
+mol addrep 0
+mol new {{{}.xyz}} type {{xyz}} first 0 last -1 step 1 waitfor 1
+mol modcolor 0 3 ColorID 20
+mol modstyle 0 3 VDW 0.020000 12.000000
+
+mol addrep 0
+mol new {{{}.xyz}} type {{xyz}} first 0 last -1 step 1 waitfor 1
+mol modcolor 0 4 ColorID 6
+mol modstyle 0 4 VDW 0.020000 12.000000
+
+mol addrep 0
+mol new {{{}}} type {{cube}} first 0 last -1 step 1 waitfor 1 volsets {{0 }}
+mol modstyle 0 5 Isosurface 0.001 0 0 0 1 1
+mol modmaterial 0 5 Transparent
+mol modcolor 0 5 ColorID 0
+mol addrep 0
+mol modstyle 1 5 Isosurface 0.001 0 0 0 1 1
+mol modmaterial 1 5 Transparent
+mol modcolor 1 5 ColorID 1
+
+draw text {{0.0 0.0 -4.5}} "Blue: {:3.5f}"
+draw text {{0.0 0.0 -5.0}} "Red: {:3.5f}"
+draw text {{0.0 0.0 -5.5}} "C10: {:3.5f}"
+draw text {{0.0 0.0 -6.0}} "C11: {:3.5f}"
+
+'''
+
 def cube_single_bonds(path_cube, r_c, r_s, cyl_shrink):
     '''
     It calculates the single geometry "in between bonds"
@@ -428,6 +508,8 @@ def cube_single_bonds(path_cube, r_c, r_s, cyl_shrink):
     r_c :: double <- radius of cylinder
     r_s :: double <- radius of sphere
     cyl_shrink :: double <- distance between atom and cylinder
+
+    This function puts serious shame in my programming abilities.
     '''
     from create_gridlists import points_in_cylinder, points_in_sphere
     cube = read_cube(path_cube)
@@ -474,7 +556,32 @@ def cube_single_bonds(path_cube, r_c, r_s, cyl_shrink):
     value_2 = sum(cube_values[list_2])*differential
     value_3 = sum(cube_values[list_3])*differential
     value_4 = sum(cube_values[list_4])*differential
-    print('{} {} {} {}'.format(value_1,value_2,value_3,value_4))
+
+    first_thing = fromBohToAng(np.concatenate((list_of_points_in_3d[a],list_of_points_in_3d[b])))
+    second_thing = fromBohToAng(np.concatenate((list_of_points_in_3d[c],list_of_points_in_3d[d])))
+    fourth_thing = fromBohToAng(list_of_points_in_3d[e])
+    fifth_thing = fromBohToAng(list_of_points_in_3d[f])
+
+    label = '{}_{}_{}_{}'.format(path_cube, r_c, r_s, cyl_shrink)
+    label1 = 'blue_{}'.format(label)
+    label2 = 'red_{}'.format(label)
+    label3 = 'C10{}'.format(label)
+    label4 = 'C11{}'.format(label)
+
+    saveTraj(np.array([geom]),['C','C','C','H','H','H','H','C','C','C','C','H','H','H','H'], label, convert=True)
+    saveTraj(np.array([first_thing]),['H']*len(first_thing), label1)
+    saveTraj(np.array([second_thing]),['H']*len(second_thing), label2)
+    saveTraj(np.array([fourth_thing]),['H']*len(fourth_thing), label3)
+    saveTraj(np.array([fifth_thing]),['H']*len(fifth_thing), label4)
+    vmd_script = vmd_scriptString()
+
+    vmd_script_name = '{}.vmd'.format(label)
+    with open(vmd_script_name, 'w') as vmds:
+         vmds.write(vmd_script.format(label,label1,label2,label3,label4,path_cube,value_1,value_2,value_3,value_4))
+
+    print('\nPlease type:\n\n vmd -e {} \n\n\n'.format(vmd_script_name))
+    print('{} {} {} {} {}'.format(value_1,value_2,value_3,value_4,path_cube))
+
 
 
 def cube_difference(path_cube_1, path_cube_2):
@@ -565,10 +672,43 @@ def command_line_parser():
                     nargs='+',
                     type=str,
                     help="This is the in between bonds for single geometry. It is the CUBE file followed by the three parameters, r_c, r_s, cyl_shrink")
+    parser.add_argument("-f", "--follow",
+                    dest="f",
+                    type=str,
+                    help="This is FOLLOW mode. Takes an yml as input. It follows the density on a single or a group of points along one MD.")
+
     if len(sys.argv) == 1:
         parser.print_help()
     return parser.parse_args()
 
+def parallel_wf(single_file_wf,one_every,p,g,t,hms,file_list,h5file_folder,args,molcas_h5file_path,nucl_coord,data,wf_folder):
+            print('\n\nI am doing now {}'.format(single_file_wf))
+            # cube data
+
+            xmin, ymin, zmin = data['mins']
+            nx, ny, nz = data['num_points']
+            x = np.linspace(xmin,-xmin,nx)
+            y = np.linspace(ymin,-ymin,ny)
+            z = np.linspace(zmin,-zmin,nz)
+            dx = x[1]-x[0]
+            dy = y[1]-y[0]
+            dz = z[1]-z[0]
+
+            with h5.File(single_file_wf,'r') as wf_file:
+                wf_int = wf_file['WF']
+                time = wf_file['Time'][0]
+                wf = wf_int[15:-15, 15:-15, 30:-30, :]
+                #wvpck_data_not_normalized = np.ndarray.flatten(wf[p-hms:p+hms+1,g-hms:g+hms+1,t-hms:t+hms+1])
+                #wvpck_data = wvpck_data_not_normalized / np.linalg.norm(wvpck_data_not_normalized)
+                wvpck_data = np.ndarray.flatten(wf[p-hms:p+hms+1,g-hms:g+hms+1,t-hms:t+hms+1])
+                file_to_be_processed = np.ndarray.flatten(file_list[p-hms:p+hms+1,g-hms:g+hms+1,t-hms:t+hms+1])
+                file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed ]
+                if args.active:
+                    final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,True)
+                else:
+                    final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,False)
+                target_file = 'znorb-{}-{}_{}_{}_dis-{}_{:08.3f}.cube'.format(os.path.basename(wf_folder),p,g,t,hms,time)
+                cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
 
 def Main():
     print('warning, n_mo and nes hardcoded on function creating_cube_function_fro_nuclear_list')
@@ -581,6 +721,32 @@ def Main():
     cut_states = 8
 
     args = command_line_parser()
+    #print(args)
+
+    if args.f != None:
+        yml_filename = os.path.abspath(args.f)
+        data = yaml.load(open(yml_filename,'r'))
+        num_cores = data['cores']
+        wf_folder = data['wf_folder']
+        files_wf = sorted(glob.glob(wf_folder + '/Gauss*.h5'))
+        if 'one_every' in data:
+            one_every = data['one_every']
+        else:
+            one_every = 1
+
+        file_list = create_full_list_of_labels_numpy(data)
+
+        center = data['center']
+        pe,ge,te = center
+        p,g,t = pe-15,ge-15,te-30
+        hms = data['how_many_step']
+        h5file_folder = data['folder']
+        center_label = file_list[p,g,t]
+        molcas_h5file_path = os.path.join(h5file_folder, center_label + '.rasscf.h5')
+        nucl_coord = np.asarray(h5.File(molcas_h5file_path,'r')['CENTER_COORDINATES'])
+        inputs = files_wf[::one_every]
+        Parallel(n_jobs=num_cores)(delayed(parallel_wf)(single_file_wf,one_every,p,g,t,hms,file_list,h5file_folder,args,molcas_h5file_path,nucl_coord,data,wf_folder) for single_file_wf in inputs)
+
 
     if args.p != None:
         cube_file, r_c, r_s, cyl_shrink = args.p[0], float(args.p[1]), float(args.p[2]), float(args.p[3])
@@ -679,37 +845,41 @@ def Main():
         num_cores = data['cores']
         wf_folder = data['wf_folder']
         files_wf = sorted(glob.glob(wf_folder + '/Gauss*.h5'))
+
+        # this here is the indexes of the cartesian grid on the indexes of the nucleus
+        file_pickle = data['first_second']
+        file_list_index = pickle.load(open(file_pickle,'rb'))
+
         if data['take_core_out']:
             print("\nI will take into account only ACTIVE SPACE\n")
+
         if 'one_every' in data:
             one_every = data['one_every']
         else:
             one_every = 10
+
+        threshold = data['threshold']
+        file_list = create_full_list_of_labels_numpy(data)
         for single_file_wf in files_wf[::one_every]:
             print('\n\nI am doing now {}'.format(single_file_wf))
             with h5.File(single_file_wf,'r') as wf_file:
                 wf_int = wf_file['WF']
                 time = wf_file['Time'][0]
-                threshold = data['threshold']
                 give_me_stats(time,wf_int,threshold)
                 #wf = wf_int[13:16, 14:17, 20:23, :]
                 wf = wf_int[15:-15, 15:-15, 30:-30, :]
-                print(wf.shape)
-
+                #print(wf.shape)
 
                 ## new file list thing
                 h5file_folder = data['folder']
-                file_list = create_full_list_of_labels_numpy(data)
                 sums = np.sum(abs2(wf),axis=3)
                 trues_indexes = np.where(sums>threshold)
+                print(trues_indexes)
                 wf_to_be_processed = wf[trues_indexes]
                 file_to_be_processed = file_list[trues_indexes]
                 file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed ]
 
 
-                # this here is the indexes of the cartesian grid on the indexes of the nucleus
-                file_pickle = data['first_second']
-                file_list_index = pickle.load(open(file_pickle,'rb'))
                 for lab in file_list_index:
                     file_list_index_sub = file_list_index[lab]
                     reshaped_file_list_index = file_list_index_sub.reshape(25,26,100)
