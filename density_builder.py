@@ -881,19 +881,29 @@ def Main():
 
 
                 for lab in file_list_index:
-                    file_list_index_sub = file_list_index[lab]
-                    reshaped_file_list_index = file_list_index_sub.reshape(25,26,100)
-                    list_indexes = reshaped_file_list_index[trues_indexes]
-
-                    print('Using {} I will process {} files with {} cores'.format(threshold, len(file_list_abs), num_cores))
-
-                    # parallel version
-                    inputs = tqdm(zip(wf_to_be_processed, file_list_abs, list_indexes), total=len(wf_to_be_processed))
-                    a_data = Parallel(n_jobs=num_cores)(delayed(calculate_between_carbons)(single_wf, single_file, single_indexes, data) for single_wf, single_file, single_indexes in inputs)
-                    final_sum = sum(a_data)
                     fn = lab + '.dat'
-                    with open(fn,'a') as filZ:
-                        filZ.write('{:6.3f} {:7.4f}\n'.format(time,final_sum))
+                    time_string = '{:6.3f}'.format(time)
+                    is_there = False
+                    if os.path.exists(fn):
+                        with open(fn,'r') as f:
+                            for line in f.readlines():
+                                if time_string == line.split()[0]:
+                                    is_there = True
+                    if is_there:
+                        print('It seems like {} is already calculated'.format(time_string))
+                    else:
+                        file_list_index_sub = file_list_index[lab]
+                        reshaped_file_list_index = file_list_index_sub.reshape(25,26,100)
+                        list_indexes = reshaped_file_list_index[trues_indexes]
+
+                        print('Using {} I will process {} files with {} cores'.format(threshold, len(file_list_abs), num_cores))
+
+                        # parallel version
+                        inputs = tqdm(zip(wf_to_be_processed, file_list_abs, list_indexes), total=len(wf_to_be_processed))
+                        a_data = Parallel(n_jobs=num_cores)(delayed(calculate_between_carbons)(single_wf, single_file, single_indexes, data) for single_wf, single_file, single_indexes in inputs)
+                        final_sum = sum(a_data)
+                        with open(fn,'a') as filZ:
+                            filZ.write('{} {:7.4f}\n'.format(time_string,final_sum))
 
     if args.i != None:
         # activate folder mode
