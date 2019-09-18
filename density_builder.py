@@ -874,7 +874,7 @@ def Main():
                 h5file_folder = data['folder']
                 sums = np.sum(abs2(wf),axis=3)
                 trues_indexes = np.where(sums>threshold)
-                print(trues_indexes)
+
                 wf_to_be_processed = wf[trues_indexes]
                 file_to_be_processed = file_list[trues_indexes]
                 file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed ]
@@ -885,13 +885,16 @@ def Main():
                     time_string = '{:6.3f}'.format(time)
                     is_there = False
                     if os.path.exists(fn):
+                        print('{} exists...'.format(fn))
                         with open(fn,'r') as f:
                             for line in f.readlines():
-                                if time_string == line.split()[0]:
+                                print(time,line.split()[0])
+                                if abs(time - float(line.split()[0])) < 0.00001:
                                     is_there = True
                     if is_there:
                         print('It seems like {} is already calculated'.format(time_string))
                     else:
+                        print('{} does not exist...'.format(fn))
                         file_list_index_sub = file_list_index[lab]
                         reshaped_file_list_index = file_list_index_sub.reshape(25,26,100)
                         list_indexes = reshaped_file_list_index[trues_indexes]
