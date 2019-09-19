@@ -282,7 +282,7 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,t
     '''
     tdm = np.zeros((n_mo,n_mo))
 
-    print('\n1) Calculating tdm')
+    #print('\n1) Calculating tdm')
 
     for ies in np.arange(0,nes):
         tdm = tdm+abs(wvpck_data[ies])**2*tran_den_mat[(ies)*nes+(ies)].reshape((n_mo,n_mo))
@@ -313,9 +313,10 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,t
     phii = np.empty((n_mo,nx*ny*nz))
     orbital_object = Orbitals(molcas_h5file_path,'hdf5')
 
-    print('2) Calculating MO')
+    #print('2) Calculating MO')
 
-    for i in tqdm(range(n_mo)):
+    #for i in tqdm(range(n_mo)):
+    for i in range(n_mo):
         # the mo method calculates the MO given space orbitals
         phii[i,:] = orbital_object.mo(i,A.flatten(),B.flatten(),C.flatten())
 
@@ -323,7 +324,7 @@ def creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,t
 
     take_only_active = take_only_active or False
 
-    print('3) Calculating density\n')
+    #print('3) Calculating density\n')
 
     if take_only_active:
 
@@ -859,7 +860,9 @@ def Main():
             one_every = 10
 
         threshold = data['threshold']
+        h5file_folder = data['folder']
         file_list = create_full_list_of_labels_numpy(data)
+
         for single_file_wf in files_wf[::one_every]:
             print('\n\nI am doing now {}'.format(single_file_wf))
             with h5.File(single_file_wf,'r') as wf_file:
@@ -871,7 +874,6 @@ def Main():
                 #print(wf.shape)
 
                 ## new file list thing
-                h5file_folder = data['folder']
                 sums = np.sum(abs2(wf),axis=3)
                 trues_indexes = np.where(sums>threshold)
 
@@ -888,22 +890,28 @@ def Main():
                         print('{} exists...'.format(fn))
                         with open(fn,'r') as f:
                             for line in f.readlines():
-                                print(time,line.split()[0])
                                 if abs(time - float(line.split()[0])) < 0.00001:
                                     is_there = True
                     if is_there:
                         print('It seems like {} is already calculated'.format(time_string))
                     else:
-                        print('{} does not exist...'.format(fn))
+                        print('{} at time {} does not exist...'.format(fn,time_string))
                         file_list_index_sub = file_list_index[lab]
                         reshaped_file_list_index = file_list_index_sub.reshape(25,26,100)
                         list_indexes = reshaped_file_list_index[trues_indexes]
 
                         print('Using {} I will process {} files with {} cores'.format(threshold, len(file_list_abs), num_cores))
 
-                        # parallel version
+                        ## parallel version
                         inputs = tqdm(zip(wf_to_be_processed, file_list_abs, list_indexes), total=len(wf_to_be_processed))
                         a_data = Parallel(n_jobs=num_cores)(delayed(calculate_between_carbons)(single_wf, single_file, single_indexes, data) for single_wf, single_file, single_indexes in inputs)
+
+                        ### serial version (debug)
+                        #inputs = zip(wf_to_be_processed, file_list_abs, list_indexes)
+                        #for single_wf, single_file, single_indexes in inputs:
+                        #      print(single_wf, single_file, single_indexes)
+                        #      calculate_between_carbons(single_wf, single_file, single_indexes, data)
+
                         final_sum = sum(a_data)
                         with open(fn,'a') as filZ:
                             filZ.write('{} {:7.4f}\n'.format(time_string,final_sum))
@@ -913,33 +921,19 @@ def Main():
         yml_filename = os.path.abspath(args.i)
         data = yaml.load(open(yml_filename,'r'))
         num_cores = data['cores']
-        threshold = data['threshold']
-        wf_file = h5.File(data['wf'],'r')
-        wf_int = wf_file['WF']
-        time = wf_file['Time'][0]
-        give_me_stats(time,wf_int,threshold)
-        #wf = wf_int[13:16, 14:17, 20:23, :]
-        wf = wf_int[15:-15, 15:-15, 30:-30, :]
+        wf_folder = data['wf_folder']
+        files_wf = sorted(glob.glob(wf_folder + '/Gauss*.h5'))
 
+        if 'one_every' in data:
+            one_every = data['one_every']
+        else:
+            one_every = 10
+
+        threshold = data['threshold']
 
         ## new file list thing
         h5file_folder = data['folder']
         file_list = create_full_list_of_labels_numpy(data)
-
-        # these lines are magic. wf, then absolute value (abs2), then sum along the 
-        # eletronic states, (axis=3)
-        # then get the index of this with np.where
-        # BECAUSE file_list has the same shape than sums, I can use those indexes 
-        # to extract the file name I want in 1D (file_to_be_processed).
-        sums = np.sum(abs2(wf),axis=3)
-        trues_indexes = np.where(sums>threshold)
-        wf_to_be_processed = wf[trues_indexes]
-        sums_to_be_processed = sums[trues_indexes] # I use this to weight geometries
-        file_to_be_processed = file_list[trues_indexes]
-        #print(sums,trues_indexes,file_to_be_processed)
-
-        file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed]
-        print('Using {} I will process {} files with {} cores'.format(threshold, len(file_list_abs), num_cores))
 
         xmin, ymin, zmin = data['mins']
         nx, ny, nz = data['num_points']
@@ -950,31 +944,57 @@ def Main():
         dy = y[1]-y[0]
         dz = z[1]-z[0]
 
-        ## not_parallel one
-        #final_cube = np.zeros(nx*ny*nz)
-        #for single_wf, single_file in zip(wf_to_be_processed, file_list_abs):
-        #    final_cube += creating_cube_function_fro_nuclear_list(single_wf, single_file, data)
+        for single_file_wf in files_wf[::one_every]:
+            print('\n\nI am doing now {}'.format(single_file_wf))
+            with h5.File(single_file_wf,'r') as wf_file:
+                wf_int = wf_file['WF']
+                time = wf_file['Time'][0]
+                give_me_stats(time,wf_int,threshold)
+                #wf = wf_int[13:16, 14:17, 20:23, :]
+                wf = wf_int[15:-15, 15:-15, 30:-30, :]
 
-        # parallel version
-        inputs = tqdm(zip(wf_to_be_processed, file_list_abs),total=len(wf_to_be_processed))
-        a_data = Parallel(n_jobs=num_cores)(delayed(creating_cube_function_fro_nuclear_list)(single_wf, single_file, data) for single_wf, single_file in inputs)
-        final_cube = sum(a_data)
 
-        if 'output_file' in data:
-            target_file = data['output_file']
-        else:
-            target_file = os.path.splitext(data['wf'])[0] + '.density.cube'
+                # these lines are magic. wf, then absolute value (abs2), then sum along the 
+                # eletronic states, (axis=3)
+                # then get the index of this with np.where
+                # BECAUSE file_list has the same shape than sums, I can use those indexes 
+                # to extract the file name I want in 1D (file_to_be_processed).
+                sums = np.sum(abs2(wf),axis=3)
+                trues_indexes = np.where(sums>threshold)
+                wf_to_be_processed = wf[trues_indexes]
+                sums_to_be_processed = sums[trues_indexes] # I use this to weight geometries
+                file_to_be_processed = file_list[trues_indexes]
+                #print(sums,trues_indexes,file_to_be_processed)
 
-        norm_of_abs = sum(sums_to_be_processed)
+                file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed]
+                print('Using {} I will process {} files with {} cores'.format(threshold, len(file_list_abs), num_cores))
 
-        to_be_summed = []
-        for file_geom, single_abs in zip(file_list_abs, sums_to_be_processed):
-            geom = np.asarray(h5.File(file_geom,'r')['CENTER_COORDINATES'])
-            mult = single_abs * geom
-            to_be_summed.append(mult)
-        nucl_coord = sum(to_be_summed)/norm_of_abs
+                ## not_parallel one
+                #final_cube = np.zeros(nx*ny*nz)
+                #for single_wf, single_file in zip(wf_to_be_processed, file_list_abs):
+                #    final_cube += creating_cube_function_fro_nuclear_list(single_wf, single_file, data)
 
-        cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
+                # parallel version
+                inputs = tqdm(zip(wf_to_be_processed, file_list_abs),total=len(wf_to_be_processed))
+                a_data = Parallel(n_jobs=num_cores)(delayed(creating_cube_function_fro_nuclear_list)(single_wf, single_file, data) for single_wf, single_file in inputs)
+                final_cube = sum(a_data)
+
+                if 'output_file' in data:
+                    target_file = data['output_file']
+                else:
+                    #target_file = os.path.splitext(data['wf'])[1] + '.density.cube'
+                    target_file = os.path.basename(wf_folder) + '_time-{:07.3f}.density.cube'.format(time)
+
+                norm_of_abs = sum(sums_to_be_processed)
+
+                to_be_summed = []
+                for file_geom, single_abs in zip(file_list_abs, sums_to_be_processed):
+                    geom = np.asarray(h5.File(file_geom,'r')['CENTER_COORDINATES'])
+                    mult = single_abs * geom
+                    to_be_summed.append(mult)
+                nucl_coord = sum(to_be_summed)/norm_of_abs
+
+                cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
 
 
 if __name__ == "__main__" :

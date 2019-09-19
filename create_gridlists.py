@@ -129,10 +129,6 @@ def read_single_arguments():
                         nargs='+',
                         help='3 numbers: r_c, r_s, shrink. they have to be in BOHR',
                         )
-    parser.add_argument('-r','--regions',
-                        action="store_true", default=False,
-                        help='3 numbers: r_c, r_s, shrink. they have to be in BOHR',
-                        )
     args = parser.parse_args()
 
     return args
@@ -161,7 +157,7 @@ def main():
     #print(list_of_points_in_3d.shape)
 
     if not args.parameters:
-        r_c = 1.4
+        r_c = 1.6
         list_1 = np.empty(pL*gL*tL,dtype=object)
         list_2 = np.empty(pL*gL*tL,dtype=object)
         counter = 0
@@ -173,6 +169,8 @@ def main():
                     a = np.where(points_in_nonoverlapping_cylinder(single, r_c, list_of_points_in_3d, 'red'))
                     b = np.where(points_in_nonoverlapping_cylinder(single, r_c, list_of_points_in_3d, 'blue'))
                     list_1[counter] = a[0]
+                    list_2[counter] = b[0]
+
                     if counter % 1000000 == 6:
                         first_thing = qp.fromBohToAng(list_of_points_in_3d[a])
                         second_thing = qp.fromBohToAng(list_of_points_in_3d[b])
@@ -183,7 +181,7 @@ def main():
         dic2 = {}
         dic2['list_1'] = list_1
         dic2['list_2'] = list_2
-        name_final_pickle = 'r_c{}-non-overlapping.p'.format(r_c)
+        name_final_pickle = 'r_c-{}-non-overlapping.p'.format(r_c)
         qp.pickleSave(name_final_pickle, dic2)
 
     else:
