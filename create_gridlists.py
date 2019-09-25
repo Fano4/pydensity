@@ -156,8 +156,14 @@ def main():
     list_of_points_in_3d = np.stack([A.flatten(),B.flatten(),C.flatten()]).T
     #print(list_of_points_in_3d.shape)
 
-    if not args.parameters:
-        r_c = 1.6
+    if args.parameters == None:
+        print('\n\nYou should specify some parameters...\n\n')
+    elif len(args.parameters) == 1:
+
+        r_c = float(args.parameters[0])
+
+        print('\nDoing non overlapping cylinders with radius {}\n'.format(r_c))
+
         list_1 = np.empty(pL*gL*tL,dtype=object)
         list_2 = np.empty(pL*gL*tL,dtype=object)
         counter = 0

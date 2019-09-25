@@ -683,33 +683,37 @@ def command_line_parser():
     return parser.parse_args()
 
 def parallel_wf(single_file_wf,one_every,p,g,t,hms,file_list,h5file_folder,args,molcas_h5file_path,nucl_coord,data,wf_folder):
-            print('\n\nI am doing now {}'.format(single_file_wf))
-            # cube data
+    '''
+    this is a strange function. It takes a center and a wavefunction 
+    and creates the total density due to this center
+    '''
+    print('\n\nI am doing now {}'.format(single_file_wf))
+    # cube data
 
-            xmin, ymin, zmin = data['mins']
-            nx, ny, nz = data['num_points']
-            x = np.linspace(xmin,-xmin,nx)
-            y = np.linspace(ymin,-ymin,ny)
-            z = np.linspace(zmin,-zmin,nz)
-            dx = x[1]-x[0]
-            dy = y[1]-y[0]
-            dz = z[1]-z[0]
+    xmin, ymin, zmin = data['mins']
+    nx, ny, nz = data['num_points']
+    x = np.linspace(xmin,-xmin,nx)
+    y = np.linspace(ymin,-ymin,ny)
+    z = np.linspace(zmin,-zmin,nz)
+    dx = x[1]-x[0]
+    dy = y[1]-y[0]
+    dz = z[1]-z[0]
 
-            with h5.File(single_file_wf,'r') as wf_file:
-                wf_int = wf_file['WF']
-                time = wf_file['Time'][0]
-                wf = wf_int[15:-15, 15:-15, 30:-30, :]
-                #wvpck_data_not_normalized = np.ndarray.flatten(wf[p-hms:p+hms+1,g-hms:g+hms+1,t-hms:t+hms+1])
-                #wvpck_data = wvpck_data_not_normalized / np.linalg.norm(wvpck_data_not_normalized)
-                wvpck_data = np.ndarray.flatten(wf[p-hms:p+hms+1,g-hms:g+hms+1,t-hms:t+hms+1])
-                file_to_be_processed = np.ndarray.flatten(file_list[p-hms:p+hms+1,g-hms:g+hms+1,t-hms:t+hms+1])
-                file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed ]
-                if args.active:
-                    final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,True)
-                else:
-                    final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,False)
-                target_file = 'znorb-{}-{}_{}_{}_dis-{}_{:08.3f}.cube'.format(os.path.basename(wf_folder),p,g,t,hms,time)
-                cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
+    with h5.File(single_file_wf,'r') as wf_file:
+        wf_int = wf_file['WF']
+        time = wf_file['Time'][0]
+        wf = wf_int[15:-15, 15:-15, 30:-30, :]
+        #wvpck_data_not_normalized = np.ndarray.flatten(wf[p-hms:p+hms+1,g-hms:g+hms+1,t-hms:t+hms+1])
+        #wvpck_data = wvpck_data_not_normalized / np.linalg.norm(wvpck_data_not_normalized)
+        wvpck_data = np.ndarray.flatten(wf[p-hms:p+hms+1,g-hms:g+hms+1,t-hms:t+hms+1])
+        file_to_be_processed = np.ndarray.flatten(file_list[p-hms:p+hms+1,g-hms:g+hms+1,t-hms:t+hms+1])
+        file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed ]
+        if args.active:
+            final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,True)
+        else:
+            final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,False)
+        target_file = 'znorb-{}-{}_{}_{}_dis-{}_{:08.3f}.cube'.format(os.path.basename(wf_folder),p+15,g+15,t+30,hms,time)
+        cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
 
 def Main():
     print('warning, n_mo and nes hardcoded on function creating_cube_function_fro_nuclear_list')
@@ -726,7 +730,7 @@ def Main():
 
     if args.f != None:
         yml_filename = os.path.abspath(args.f)
-        data = yaml.load(open(yml_filename,'r'))
+        data = yaml.load(open(yml_filename,'r'), Loader=yaml.FullLoader)
         num_cores = data['cores']
         wf_folder = data['wf_folder']
         files_wf = sorted(glob.glob(wf_folder + '/Gauss*.h5'))
@@ -842,7 +846,7 @@ def Main():
         # space that belongs to some rules, for which we already precalculated the index
         # This means that we DO NOT use all the grid space.
         yml_filename = os.path.abspath(args.b)
-        data = yaml.load(open(yml_filename,'r'))
+        data = yaml.load(open(yml_filename,'r'), Loader=yaml.FullLoader)
         num_cores = data['cores']
         wf_folder = data['wf_folder']
         files_wf = sorted(glob.glob(wf_folder + '/Gauss*.h5'))
@@ -919,7 +923,7 @@ def Main():
     if args.i != None:
         # activate folder mode
         yml_filename = os.path.abspath(args.i)
-        data = yaml.load(open(yml_filename,'r'))
+        data = yaml.load(open(yml_filename,'r'), Loader=yaml.FullLoader)
         num_cores = data['cores']
         wf_folder = data['wf_folder']
         files_wf = sorted(glob.glob(wf_folder + '/Gauss*.h5'))
