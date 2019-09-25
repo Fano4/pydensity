@@ -699,21 +699,31 @@ def parallel_wf(single_file_wf,one_every,p,g,t,hms,file_list,h5file_folder,args,
     dy = y[1]-y[0]
     dz = z[1]-z[0]
 
+
     with h5.File(single_file_wf,'r') as wf_file:
         wf_int = wf_file['WF']
         time = wf_file['Time'][0]
         wf = wf_int[15:-15, 15:-15, 30:-30, :]
-        #wvpck_data_not_normalized = np.ndarray.flatten(wf[p-hms:p+hms+1,g-hms:g+hms+1,t-hms:t+hms+1])
-        #wvpck_data = wvpck_data_not_normalized / np.linalg.norm(wvpck_data_not_normalized)
-        wvpck_data = np.ndarray.flatten(wf[p-hms:p+hms+1,g-hms:g+hms+1,t-hms:t+hms+1])
-        file_to_be_processed = np.ndarray.flatten(file_list[p-hms:p+hms+1,g-hms:g+hms+1,t-hms:t+hms+1])
-        file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed ]
-        if args.active:
-            final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,True)
+
+        hms_p, hms_g, hms_t = hms
+        target_file = 'znorb-{}-{}_{}_{}_dis_{}-{}-{}_{:08.3f}.cube'.format(os.path.basename(wf_folder),p+15,g+15,t+30,hms_p, hms_g, hms_t, time)
+        # if this particular cube exists already, do not calculate it
+        if os.path.isfile(target_file):
+           print('File {} already generated'.format(target_file))
         else:
-            final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,False)
-        target_file = 'znorb-{}-{}_{}_{}_dis-{}_{:08.3f}.cube'.format(os.path.basename(wf_folder),p+15,g+15,t+30,hms,time)
-        cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
+            # in case you want to normalize
+            #wvpck_data_not_normalized = np.ndarray.flatten(wf[p-hms:p+hms+1,g-hms:g+hms+1,t-hms:t+hms+1])
+            #wvpck_data = wvpck_data_not_normalized / np.linalg.norm(wvpck_data_not_normalized)
+
+
+            wvpck_data = np.ndarray.flatten(wf[p-hms_p:p+hms_p+1, g-hms_g:g+hms_g+1, t-hms_t:t+hms_t+1])
+            file_to_be_processed = np.ndarray.flatten(file_list[p-hms_p:p+hms_p+1, g-hms_g:g+hms_g+1, t-hms_t:t+hms_t+1])
+            file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed ]
+            if args.active:
+                final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,True)
+            else:
+                final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,False)
+            cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
 
 def Main():
     print('warning, n_mo and nes hardcoded on function creating_cube_function_fro_nuclear_list')
