@@ -967,48 +967,50 @@ def Main():
                 #wf = wf_int[13:16, 14:17, 20:23, :]
                 wf = wf_int[15:-15, 15:-15, 30:-30, :]
 
-
-                # these lines are magic. wf, then absolute value (abs2), then sum along the 
-                # eletronic states, (axis=3)
-                # then get the index of this with np.where
-                # BECAUSE file_list has the same shape than sums, I can use those indexes 
-                # to extract the file name I want in 1D (file_to_be_processed).
-                sums = np.sum(abs2(wf),axis=3)
-                trues_indexes = np.where(sums>threshold)
-                wf_to_be_processed = wf[trues_indexes]
-                sums_to_be_processed = sums[trues_indexes] # I use this to weight geometries
-                file_to_be_processed = file_list[trues_indexes]
-                #print(sums,trues_indexes,file_to_be_processed)
-
-                file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed]
-                print('Using {} I will process {} files with {} cores'.format(threshold, len(file_list_abs), num_cores))
-
-                ## not_parallel one
-                #final_cube = np.zeros(nx*ny*nz)
-                #for single_wf, single_file in zip(wf_to_be_processed, file_list_abs):
-                #    final_cube += creating_cube_function_fro_nuclear_list(single_wf, single_file, data)
-
-                # parallel version
-                inputs = tqdm(zip(wf_to_be_processed, file_list_abs),total=len(wf_to_be_processed))
-                a_data = Parallel(n_jobs=num_cores)(delayed(creating_cube_function_fro_nuclear_list)(single_wf, single_file, data) for single_wf, single_file in inputs)
-                final_cube = sum(a_data)
-
+                # Wanna check if output cube file already exists, before doing calculations
                 if 'output_file' in data:
                     target_file = data['output_file']
                 else:
                     #target_file = os.path.splitext(data['wf'])[1] + '.density.cube'
                     target_file = os.path.basename(wf_folder) + '_time-{:07.3f}.density.cube'.format(time)
+                if not os.path.isfile(target_file):
+                    # these lines are magic. wf, then absolute value (abs2), then sum along the 
+                    # eletronic states, (axis=3)
+                    # then get the index of this with np.where
+                    # BECAUSE file_list has the same shape than sums, I can use those indexes 
+                    # to extract the file name I want in 1D (file_to_be_processed).
+                    sums = np.sum(abs2(wf),axis=3)
+                    trues_indexes = np.where(sums>threshold)
+                    wf_to_be_processed = wf[trues_indexes]
+                    sums_to_be_processed = sums[trues_indexes] # I use this to weight geometries
+                    file_to_be_processed = file_list[trues_indexes]
+                    #print(sums,trues_indexes,file_to_be_processed)
 
-                norm_of_abs = sum(sums_to_be_processed)
+                    file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed]
+                    print('Using {} I will process {} files with {} cores'.format(threshold, len(file_list_abs), num_cores))
 
-                to_be_summed = []
-                for file_geom, single_abs in zip(file_list_abs, sums_to_be_processed):
-                    geom = np.asarray(h5.File(file_geom,'r')['CENTER_COORDINATES'])
-                    mult = single_abs * geom
-                    to_be_summed.append(mult)
-                nucl_coord = sum(to_be_summed)/norm_of_abs
+                    ## not_parallel one
+                    #final_cube = np.zeros(nx*ny*nz)
+                    #for single_wf, single_file in zip(wf_to_be_processed, file_list_abs):
+                    #    final_cube += creating_cube_function_fro_nuclear_list(single_wf, single_file, data)
 
-                cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
+                    # parallel version
+                    inputs = tqdm(zip(wf_to_be_processed, file_list_abs),total=len(wf_to_be_processed))
+                    a_data = Parallel(n_jobs=num_cores)(delayed(creating_cube_function_fro_nuclear_list)(single_wf, single_file, data) for single_wf, single_file in inputs)
+                    final_cube = sum(a_data)
+
+                    norm_of_abs = sum(sums_to_be_processed)
+
+                    to_be_summed = []
+                    for file_geom, single_abs in zip(file_list_abs, sums_to_be_processed):
+                        geom = np.asarray(h5.File(file_geom,'r')['CENTER_COORDINATES'])
+                        mult = single_abs * geom
+                        to_be_summed.append(mult)
+                    nucl_coord = sum(to_be_summed)/norm_of_abs
+
+                    cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
+                else:
+                    print('File {} exists...'.format(target_file))
 
 
 if __name__ == "__main__" :
