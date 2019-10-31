@@ -250,7 +250,7 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
         phii[i,:] = orbital_object.mo(i,first[indexes],second[indexes],third[indexes])
 
     cube_array = np.zeros(number_of_points)
-    # HERE HERE
+
     if data['take_core_out']:
 
         for i in range(n_core,n_mo):
@@ -476,113 +476,81 @@ mol modcolor 0 2 ColorID 1
 mol modstyle 0 2 VDW 0.020000 12.000000
 
 mol addrep 0
-mol new {{{}.xyz}} type {{xyz}} first 0 last -1 step 1 waitfor 1
-mol modcolor 0 3 ColorID 20
-mol modstyle 0 3 VDW 0.020000 12.000000
-
-mol addrep 0
-mol new {{{}.xyz}} type {{xyz}} first 0 last -1 step 1 waitfor 1
-mol modcolor 0 4 ColorID 6
-mol modstyle 0 4 VDW 0.020000 12.000000
-
-mol addrep 0
 mol new {{{}}} type {{cube}} first 0 last -1 step 1 waitfor 1 volsets {{0 }}
-mol modstyle 0 5 Isosurface 0.001 0 0 0 1 1
-mol modmaterial 0 5 Transparent
-mol modcolor 0 5 ColorID 0
+mol modstyle 0 3 Isosurface 0.001 0 0 0 1 1
+mol modmaterial 0 3 Transparent
+mol modcolor 0 3 ColorID 0
 mol addrep 0
-mol modstyle 1 5 Isosurface 0.001 0 0 0 1 1
-mol modmaterial 1 5 Transparent
-mol modcolor 1 5 ColorID 1
+mol modstyle 1 3 Isosurface 0.001 0 0 0 1 1
+mol modmaterial 1 3 Transparent
+mol modcolor 1 3 ColorID 1
 
-draw text {{0.0 0.0 -4.5}} "Blue: {:3.5f}"
-draw text {{0.0 0.0 -5.0}} "Red: {:3.5f}"
-draw text {{0.0 0.0 -5.5}} "C10: {:3.5f}"
-draw text {{0.0 0.0 -6.0}} "C11: {:3.5f}"
+draw text {{0.0 0.0 -4.5}} "NewBond: {:3.5f}"
+draw text {{0.0 0.0 -5.0}} "OldBond: {:3.5f}"
 
 '''
 
-def cube_single_bonds(path_cube, r_c, r_s, cyl_shrink):
+def cube_single_bonds(path_cube, r_c):
     '''
-    It calculates the single geometry "in between bonds"
+    It calculates the single geometry "in between bonds of non overlapping cyls"
     path_cube :: String <- filepath
     r_c :: double <- radius of cylinder
-    r_s :: double <- radius of sphere
-    cyl_shrink :: double <- distance between atom and cylinder
 
     This function puts serious shame in my programming abilities.
     '''
-    from create_gridlists import points_in_cylinder, points_in_sphere
+    ###### points_in_nonoverlapping_cylinder(geom, r, q, kind)
+    from create_gridlists import points_in_nonoverlapping_cylinder
     cube = read_cube(path_cube)
-    dx,dy,dz = cube['ds']
-    differential = dx * dy * dz
     geom = np.vstack([ x['xyz'] for x in cube['centers'] ])
     print(cube.keys())
     print('\nWarning, function cube_single_bonds is SEVERLY hardcoded\n')
-    uno = 10
-    due = 9
-    tre = 8
-    qua = 7
 
-    xmin, ymin, zmin = -10,-10,-10
-    nx, ny, nz = 64,64,64
+    #xmin, ymin, zmin = -10,-10,-10
+    #nx, ny, nz = 64,64,64
+    xmin, ymin, zmin = cube['mins']
+    dx, dy, dz = cube['ds']
+    nx, ny, nz = cube['ngrids']
+    differential = dx * dy * dz
     x = np.linspace(xmin,-xmin,nx)
     y = np.linspace(ymin,-ymin,ny)
     z = np.linspace(zmin,-zmin,nz)
-    dx = x[1]-x[0]
-    dy = y[1]-y[0]
-    dz = z[1]-z[0]
+    #dx = x[1]-x[0]
+    #dy = y[1]-y[0]
+    #dz = z[1]-z[0]
 
     B,A,C = np.meshgrid(x,y,z)
     list_of_points_in_3d = np.stack([A.flatten(),B.flatten(),C.flatten()]).T
 
-    pt1 = geom[uno]
-    pt2 = geom[due]
-    pt3 = geom[tre]
-    pt4 = geom[qua]
-    a = np.where(points_in_cylinder(pt1, pt2, r_c, list_of_points_in_3d, cyl_shrink))
-    b = np.where(points_in_cylinder(pt3, pt4, r_c, list_of_points_in_3d, cyl_shrink))
-    c = np.where(points_in_cylinder(pt1, pt4, r_c, list_of_points_in_3d, cyl_shrink))
-    d = np.where(points_in_cylinder(pt2, pt3, r_c, list_of_points_in_3d, cyl_shrink))
-    e = np.where(points_in_sphere(pt1, r_s, list_of_points_in_3d))
-    f = np.where(points_in_sphere(pt2, r_s, list_of_points_in_3d))
+    # from now on 1 is newbond and 2 is oldbond
+    sel1 = np.where(points_in_nonoverlapping_cylinder(geom, r_c, list_of_points_in_3d, 'blue'))
+    sel2 = np.where(points_in_nonoverlapping_cylinder(geom, r_c, list_of_points_in_3d, 'red'))
 
-    list_1 = np.concatenate((a[0],b[0])) # single
-    list_2 = np.concatenate((c[0],d[0])) # double
-    list_3 = e[0]
-    list_4 = f[0]
+    list_1 = sel1[0] # single
+    list_2 = sel2[0] # double
 
     cube_values = cube['grid']
     value_1 = sum(cube_values[list_1])*differential
     value_2 = sum(cube_values[list_2])*differential
-    value_3 = sum(cube_values[list_3])*differential
-    value_4 = sum(cube_values[list_4])*differential
 
-    first_thing = fromBohToAng(np.concatenate((list_of_points_in_3d[a],list_of_points_in_3d[b])))
-    second_thing = fromBohToAng(np.concatenate((list_of_points_in_3d[c],list_of_points_in_3d[d])))
-    fourth_thing = fromBohToAng(list_of_points_in_3d[e])
-    fifth_thing = fromBohToAng(list_of_points_in_3d[f])
+    first_thing = fromBohToAng(list_of_points_in_3d[a])
+    second_thing = fromBohToAng(list_of_points_in_3d[b])
 
-    label = '{}_{}_{}_{}'.format(path_cube, r_c, r_s, cyl_shrink)
-    label1 = 'blue_{}'.format(label)
-    label2 = 'red_{}'.format(label)
-    label3 = 'C10{}'.format(label)
-    label4 = 'C11{}'.format(label)
+    label = '{}_{}_non-overlapping'.format(path_cube, r_c)
+    label1 = 'new_bond_{}'.format(label)
+    label2 = 'old_bond_{}'.format(label)
 
     saveTraj(np.array([geom]),['C','C','C','H','H','H','H','C','C','C','C','H','H','H','H'], label, convert=True)
     saveTraj(np.array([first_thing]),['H']*len(first_thing), label1)
     saveTraj(np.array([second_thing]),['H']*len(second_thing), label2)
-    saveTraj(np.array([fourth_thing]),['H']*len(fourth_thing), label3)
-    saveTraj(np.array([fifth_thing]),['H']*len(fifth_thing), label4)
+
     vmd_script = vmd_scriptString()
 
     vmd_script_name = '{}.vmd'.format(label)
     with open(vmd_script_name, 'w') as vmds:
-         vmds.write(vmd_script.format(label,label1,label2,label3,label4,path_cube,value_1,value_2,value_3,value_4))
+         vmds.write(vmd_script.format(label,label1,label2,path_cube,value_1,value_2))
 
     print('\nPlease type:\n\n vmd -e {} \n\n\n'.format(vmd_script_name))
-    print('{} {} {} {} {}'.format(value_1,value_2,value_3,value_4,path_cube))
-
+    print('{} {} {}'.format(value_1,value_2,path_cube))
 
 
 def cube_difference(path_cube_1, path_cube_2):
@@ -590,21 +558,29 @@ def cube_difference(path_cube_1, path_cube_2):
     From the path of two cubes, get the difference
     '''
     root_folder = os.path.dirname(os.path.abspath(path_cube_1))
+
     label1 = os.path.splitext(path_cube_1)[0]
     label2 = os.path.splitext(path_cube_2)[0]
+
     output_name = '{}_minus_{}.cube'.format(label1,label2)
+
     target_file = os.path.join(root_folder,output_name)
+
     cube1 = read_cube(path_cube_1)
     cube2 = read_cube(path_cube_2)
+
     xmin, ymin, zmin = cube2['mins']
     dx, dy, dz = cube2['ds']
     nx, ny, nz = cube2['ngrids']
-    final_cube = cube2['grid'] - cube1['grid']
+
+    final_cube = cube1['grid'] - cube2['grid']
+
     natoms = cube2['natoms']
     centers = cube1['centers']
     nucl_coord = np.zeros((natoms,3))
     for i in range(natoms):
         nucl_coord[i] = centers[i]['xyz']
+
     cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
     print('File {} written.'.format(target_file))
 
@@ -672,7 +648,7 @@ def command_line_parser():
                     dest="p",
                     nargs='+',
                     type=str,
-                    help="This is the in between bonds for single geometry. It is the CUBE file followed by the three parameters, r_c, r_s, cyl_shrink")
+                    help="This is the in between bonds for single geometry. It is the CUBE file followed by radius of non overlapping cylinder r_c")
     parser.add_argument("-f", "--follow",
                     dest="f",
                     type=str,
@@ -684,7 +660,7 @@ def command_line_parser():
 
 def parallel_wf(single_file_wf,one_every,p,g,t,hms,file_list,h5file_folder,args,molcas_h5file_path,nucl_coord,data,wf_folder):
     '''
-    this is a strange function. It takes a center and a wavefunction 
+    this is a strange function. It takes a center and a wavefunction
     and creates the total density due to this center
     '''
     print('\n\nI am doing now {}'.format(single_file_wf))
@@ -764,8 +740,8 @@ def Main():
 
 
     if args.p != None:
-        cube_file, r_c, r_s, cyl_shrink = args.p[0], float(args.p[1]), float(args.p[2]), float(args.p[3])
-        cube_single_bonds(cube_file, r_c, r_s, cyl_shrink)
+        cube_file, r_c = args.p[0], float(args.p[1])
+        cube_single_bonds(cube_file, r_c)
 
     if args.n != None:
         cube_sum_grid_points(args.n)
@@ -824,9 +800,10 @@ def Main():
         '''
 
         # 8 is electronic states
-        for state in range(8):
-        #for state in range(1):
-            wvpck_data = np.zeros(8)
+        nstates = 8
+        for state in range(nstates):
+        #for state in range(0):
+            wvpck_data = np.zeros(nstates)
             wvpck_data[state] = 1
             if args.active:
                 final_cube = creating_cube_function_fro_nuclear_list(wvpck_data,molcas_h5file_path,data,True)
@@ -836,6 +813,7 @@ def Main():
                 target_file = os.path.splitext(molcas_h5file_path)[0] + '.testsingle_S{}.cube'.format(state)
 
             cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
+
         ## 0.7071 = sqrt(2)
         #thing = 0.7071
         #amplit = [(thing,thing),
@@ -916,11 +894,11 @@ def Main():
 
                         print('Using {} I will process {} files with {} cores'.format(threshold, len(file_list_abs), num_cores))
 
-                        ## parallel version
+                        ##             parallel version
                         inputs = tqdm(zip(wf_to_be_processed, file_list_abs, list_indexes), total=len(wf_to_be_processed))
                         a_data = Parallel(n_jobs=num_cores)(delayed(calculate_between_carbons)(single_wf, single_file, single_indexes, data) for single_wf, single_file, single_indexes in inputs)
 
-                        ### serial version (debug)
+                        ###            serial version (debug)
                         #inputs = zip(wf_to_be_processed, file_list_abs, list_indexes)
                         #for single_wf, single_file, single_indexes in inputs:
                         #      print(single_wf, single_file, single_indexes)
