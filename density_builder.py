@@ -220,6 +220,7 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
     tdm_file = h5.File(os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5', 'r')
     tran_den_mat = tdm_file['TDM']
     tdm = np.zeros((n_mo,n_mo))
+    # HERE CHANGE THE 0 TO 1
     for ies in np.arange(0,nes):
         tdm = tdm+abs(wvpck_data[ies])**2*tran_den_mat[(ies)*nes+(ies)].reshape((n_mo,n_mo))
         for jes in np.arange(ies+1,nes):
@@ -505,8 +506,6 @@ def cube_single_bonds(path_cube, r_c):
     print(cube.keys())
     print('\nWarning, function cube_single_bonds is SEVERLY hardcoded\n')
 
-    #xmin, ymin, zmin = -10,-10,-10
-    #nx, ny, nz = 64,64,64
     xmin, ymin, zmin = cube['mins']
     dx, dy, dz = cube['ds']
     nx, ny, nz = cube['ngrids']
@@ -514,9 +513,6 @@ def cube_single_bonds(path_cube, r_c):
     x = np.linspace(xmin,-xmin,nx)
     y = np.linspace(ymin,-ymin,ny)
     z = np.linspace(zmin,-zmin,nz)
-    #dx = x[1]-x[0]
-    #dy = y[1]-y[0]
-    #dz = z[1]-z[0]
 
     B,A,C = np.meshgrid(x,y,z)
     list_of_points_in_3d = np.stack([A.flatten(),B.flatten(),C.flatten()]).T
@@ -532,8 +528,8 @@ def cube_single_bonds(path_cube, r_c):
     value_1 = sum(cube_values[list_1])*differential
     value_2 = sum(cube_values[list_2])*differential
 
-    first_thing = fromBohToAng(list_of_points_in_3d[a])
-    second_thing = fromBohToAng(list_of_points_in_3d[b])
+    first_thing = fromBohToAng(list_of_points_in_3d[sel1])
+    second_thing = fromBohToAng(list_of_points_in_3d[sel2])
 
     label = '{}_{}_non-overlapping'.format(path_cube, r_c)
     label1 = 'new_bond_{}'.format(label)
@@ -582,7 +578,7 @@ def cube_difference(path_cube_1, path_cube_2):
         nucl_coord[i] = centers[i]['xyz']
 
     cubegen(xmin,ymin,zmin,dx,dy,dz,nx,ny,nz,target_file,final_cube.reshape(nx, ny, nz),nucl_coord)
-    print('File {} written.'.format(target_file))
+    print('File {} written.'.format(os.path.basename(target_file)))
 
 
 def give_me_stats(time, wf, threshold):
