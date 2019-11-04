@@ -44,8 +44,7 @@ def points_in_cylinder(pt1, pt2, r, q, cyl_shrink):
 def points_in_nonoverlapping_cylinder(geom, r, q, kind):
     '''
     given a 1d vector of points q, returns a boolean telling if the point is into the
-    cylinder defined by the two points pt1 and pt2 and radius r.
-    cyl_shrink is the distance between the two atoms at which the cylinder starts
+    region defined by "the non overlapping cylinders".
     '''
 
     pt0 = geom[0]

@@ -20,6 +20,16 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 from orbitals_molcas import Orbitals
 
+def writeH5fileDict(fn, dictionary):
+    '''
+    writes a h5 file, dictionary edition
+    fn :: String <- the output path
+    dictionary :: {Values}  <- the content of Hdf5
+    '''
+    with h5.File(fn, 'w') as hf:
+        for key in dictionary.keys():
+            hf.create_dataset(key, data=dictionary[key])
+
 def fromBohToAng(n):
     ''' From Bohr to Angstrom conversion - n :: Double '''
     return (n * 0.529177249)
@@ -208,20 +218,28 @@ def get_TDM(molcas_h5file_path,updown_file,inactive,cut_states):
                 output_h5_file.close()
     molcas_h5file.close()
 
-def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
+def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data,no_s0=None):
     '''
     This returns the electronic density summed up on all the points in between carbons
     wvpck_data :: np.array(Double) <- the 1d singular geom multielectronic state wf.
     molcas_h5file_path :: String <- FilePath
     data :: Dictionary
     indexes :: np.array(Int) <-the indexes of the FLATTEN ARRAY in the cartesian cube.
+    no_s0 :: Bool <- take out S0 from the computation
     '''
+    no_s0 = no_s0 or False
     n_mo, nes, n_core = 31, 8, 23
     tdm_file = h5.File(os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5', 'r')
     tran_den_mat = tdm_file['TDM']
     tdm = np.zeros((n_mo,n_mo))
-    # HERE CHANGE THE 0 TO 1
-    for ies in np.arange(0,nes):
+
+    # u wanna take out S0?
+    if no_s0:
+        begin_here = 1
+    else:
+        begin_here = 0
+
+    for ies in np.arange(begin_here,nes):
         tdm = tdm+abs(wvpck_data[ies])**2*tran_den_mat[(ies)*nes+(ies)].reshape((n_mo,n_mo))
         for jes in np.arange(ies+1,nes):
             #print(ies,jes,"are the es")
@@ -264,7 +282,9 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
             for j in range(n_mo):
                 cube_array += phii[i] * phii[j] * tdm[i,j]
 
-    return np.sum(cube_array) * (dx*dy*dz)
+    final = np.sum(cube_array) * (dx*dy*dz)
+
+    return final
 
 
 
@@ -645,6 +665,10 @@ def command_line_parser():
                     nargs='+',
                     type=str,
                     help="This is the in between bonds for single geometry. It is the CUBE file followed by radius of non overlapping cylinder r_c")
+    parser.add_argument("-e", "--e-was-free-letter",
+                    dest="e",
+                    type=str,
+                    help="This creates actual cube of values for newbond and oldbond to be plotted with blender. Takes as argument an yml")
     parser.add_argument("-f", "--follow",
                     dest="f",
                     type=str,
@@ -710,6 +734,66 @@ def Main():
     args = command_line_parser()
     #print(args)
 
+    if args.e != None:
+        # this part is shitty. Sorry future Alessio.
+        print('literally everything in option e is bound to Norbornadiene')
+        yml_filename = os.path.abspath(args.e)
+        data = yaml.load(open(yml_filename,'r'), Loader=yaml.FullLoader)
+
+        num_cores = data['cores']
+        h5file_folder = data['folder']
+
+        # grid parameters 
+        xmin, ymin, zmin = data['mins']
+        nx, ny, nz = data['num_points']
+        x = np.linspace(xmin,-xmin,nx)
+        y = np.linspace(ymin,-ymin,ny)
+        z = np.linspace(zmin,-zmin,nz)
+        dx = x[1]-x[0]
+        dy = y[1]-y[0]
+        dz = z[1]-z[0]
+
+
+        labels = ['S0','S1','S2','S3','S4','S5','S6','S7']
+
+        for label_index, label in enumerate(labels):
+            # this wavefunction
+            s0 = np.zeros((25,26,100,8))
+            s0[:,:,:,label_index] = 1
+
+            # this here is the indexes of the cartesian grid on the indexes of the nucleus
+            file_pickle = data['first_second']
+            file_list_index = pickle.load(open(file_pickle,'rb'))
+            file_list = create_full_list_of_labels_numpy(data)
+
+            # bear with me
+            file_to_be_processed = file_list.flatten()
+            wf_to_be_processed = s0.reshape(65000,8)
+            file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed ]
+            for lab in file_list_index:
+                diction = {}
+                output = 'between-map_{}_{}.h5'.format(label,lab)
+                file_list_index_sub = file_list_index[lab]
+                list_indexes = file_list_index_sub
+                print(len(wf_to_be_processed), len(file_list_abs), len(list_indexes))
+
+                #cut = 64
+                #inputs = tqdm(zip(wf_to_be_processed[:cut], file_list_abs[:cut], list_indexes[:cut]), total=len(wf_to_be_processed))
+
+                inputs = tqdm(zip(wf_to_be_processed, file_list_abs, list_indexes), total=len(wf_to_be_processed))
+                a_data = Parallel(n_jobs=num_cores)(delayed(calculate_between_carbons)(single_wf, single_file, single_indexes, data) for single_wf, single_file, single_indexes in inputs)
+
+                reshaped_bonds = np.array(a_data).reshape(25,26,100)
+                #reshaped_bonds = np.array(a_data).reshape(4,4,4)
+
+                final = np.zeros((55,56,160))# + 999
+                final[15:-15,15:-15,30:-30] = reshaped_bonds
+                #final[15:19,15:19,30:34] = reshaped_bonds
+                diction['values'] = final
+
+                writeH5fileDict(output,diction)
+
+
     if args.f != None:
         yml_filename = os.path.abspath(args.f)
         data = yaml.load(open(yml_filename,'r'), Loader=yaml.FullLoader)
@@ -733,7 +817,6 @@ def Main():
         nucl_coord = np.asarray(h5.File(molcas_h5file_path,'r')['CENTER_COORDINATES'])
         inputs = files_wf[::one_every]
         Parallel(n_jobs=num_cores)(delayed(parallel_wf)(single_file_wf,one_every,p,g,t,hms,file_list,h5file_folder,args,molcas_h5file_path,nucl_coord,data,wf_folder) for single_file_wf in inputs)
-
 
     if args.p != None:
         cube_file, r_c = args.p[0], float(args.p[1])
@@ -864,7 +947,7 @@ def Main():
                 ## new file list thing
                 sums = np.sum(abs2(wf),axis=3)
                 trues_indexes = np.where(sums>threshold)
-
+                # the following operation flatten the lists, because np.where returns a flat list
                 wf_to_be_processed = wf[trues_indexes]
                 file_to_be_processed = file_list[trues_indexes]
                 file_list_abs = [ os.path.join(h5file_folder, single + '.rasscf.h5') for single in file_to_be_processed ]
@@ -878,6 +961,7 @@ def Main():
                         print('{} exists...'.format(fn))
                         with open(fn,'r') as f:
                             for line in f.readlines():
+                                # this shit below does not work
                                 if abs(time - float(line.split()[0])) < 0.00001:
                                     is_there = True
                     if is_there:
@@ -890,6 +974,7 @@ def Main():
 
                         print('Using {} I will process {} files with {} cores'.format(threshold, len(file_list_abs), num_cores))
 
+                        ## HERE HERE you can put option to take out S0
                         ##             parallel version
                         inputs = tqdm(zip(wf_to_be_processed, file_list_abs, list_indexes), total=len(wf_to_be_processed))
                         a_data = Parallel(n_jobs=num_cores)(delayed(calculate_between_carbons)(single_wf, single_file, single_indexes, data) for single_wf, single_file, single_indexes in inputs)
