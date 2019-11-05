@@ -253,6 +253,7 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data,no_s0=N
     dx = x[1]-x[0]
     dy = y[1]-y[0]
     dz = z[1]-z[0]
+    # why meshgrid is always like this? I do not see why this swap (BAC) is always present
     B,A,C = np.meshgrid(x,y,z)
     orbital_object = Orbitals(molcas_h5file_path,'hdf5')
     number_of_points, = indexes.shape
@@ -840,7 +841,7 @@ def Main():
 
     if args.t != None:
         list_of_files = args.t
-        if args.c != None:
+        if args.c == None:
             #num_cores = multiprocessing.cpu_count()
             num_cores = 4
         else:
