@@ -629,6 +629,10 @@ def command_line_parser():
     parser.add_argument("-a", "--active",
                     action="store_true", default=False,
                     help="in single mode, switch active or all")
+    parser.add_argument("-u", "--up_down",
+                    dest="u",
+                    type=str,
+                    help="Up_down file")
     parser.add_argument("-t", "--tdm",
                     dest="t",
                     nargs='+',
@@ -729,6 +733,9 @@ def Main():
 
     # ON SASHA
     updown_file = '/home/alessio/config/Stephan/up_down'
+    if args.u != None:
+        updown_file = args.u
+
     inactive = 23
     cut_states = 8
 
