@@ -728,6 +728,13 @@ def parallel_wf(single_file_wf,one_every,p,g,t,hms,file_list,h5file_folder,args,
 
 def Main():
     print('warning, n_mo and nes hardcoded on function creating_cube_function_fro_nuclear_list')
+
+    inactive = 23
+    cut_states = 8
+
+    args = command_line_parser()
+    #print(args)
+
     # on MAC
     # updown_file = '/Users/stephan/dox/Acu-Stephan/up_down'
 
@@ -735,12 +742,6 @@ def Main():
     updown_file = '/home/alessio/config/Stephan/up_down'
     if args.u != None:
         updown_file = args.u
-
-    inactive = 23
-    cut_states = 8
-
-    args = command_line_parser()
-    #print(args)
 
     if args.e != None:
         # this part is shitty. Sorry future Alessio.
