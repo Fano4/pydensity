@@ -218,7 +218,7 @@ def get_TDM(molcas_h5file_path,updown_file,inactive,cut_states):
                 output_h5_file.close()
     molcas_h5file.close()
 
-def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data,no_s0=None):
+def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
     '''
     This returns the electronic density summed up on all the points in between carbons
     wvpck_data :: np.array(Double) <- the 1d singular geom multielectronic state wf.
@@ -227,7 +227,7 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data,no_s0=N
     indexes :: np.array(Int) <-the indexes of the FLATTEN ARRAY in the cartesian cube.
     no_s0 :: Bool <- take out S0 from the computation
     '''
-    no_s0 = no_s0 or False
+    no_s0 = data['no_s0']
     n_mo, nes, n_core = 31, 8, 23
     tdm_file = h5.File(os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5', 'r')
     tran_den_mat = tdm_file['TDM']
