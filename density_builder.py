@@ -224,7 +224,7 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
     no_s0 :: Bool <- take out S0 from the computation
     '''
     no_s0 = data['no_s0']
-    n_mo, nes, n_core = 31, 8, 23
+    n_mo, nes, n_inactive, n_core = 31, 8, 23, 7
     tdm_file = h5.File(os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5', 'r')
     tran_den_mat = tdm_file['TDM']
     tdm_popu = np.zeros((n_mo,n_mo))
@@ -268,25 +268,47 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
 
     cube_array_popu = np.zeros(number_of_points)
     cube_array_cohe = np.zeros(number_of_points)
+    cube_array_popu_core = np.zeros(number_of_points)
+    cube_array_cohe_core = np.zeros(number_of_points)
+    cube_array_popu_inactive = np.zeros(number_of_points)
+    cube_array_cohe_inactive = np.zeros(number_of_points)
+    cube_array_popu_active = np.zeros(number_of_points)
+    cube_array_cohe_active = np.zeros(number_of_points)
 
-    if data['take_core_out']:
+    # core
+    for i in range(n_core):
+        for j in range(n_core):
+            cube_array_popu_core += phii[i] * phii[j] * tdm_popu[i,j]
+            cube_array_cohe_core += phii[i] * phii[j] * tdm_cohe[i,j]
 
-        for i in range(n_core,n_mo):
-            for j in range(n_core,n_mo):
-                cube_array_popu += phii[i] * phii[j] * tdm_popu[i,j]
-                cube_array_cohe += phii[i] * phii[j] * tdm_cohe[i,j]
+    # inactive
+    for i in range(n_inactive):
+        for j in range(n_inactive):
+            cube_array_popu_inactive += phii[i] * phii[j] * tdm_popu[i,j]
+            cube_array_cohe_inactive += phii[i] * phii[j] * tdm_cohe[i,j]
 
-    else:
+    # Actives
+    for i in range(n_inactive,n_mo):
+        for j in range(n_inactive,n_mo):
+            cube_array_popu_active += phii[i] * phii[j] * tdm_popu[i,j]
+            cube_array_cohe_active += phii[i] * phii[j] * tdm_cohe[i,j]
 
-        for i in range(n_mo):
-            for j in range(n_mo):
-                cube_array_popu += phii[i] * phii[j] * tdm_popu[i,j]
-                cube_array_cohe += phii[i] * phii[j] * tdm_cohe[i,j]
+    # TOTAL
+    for i in range(n_mo):
+        for j in range(n_mo):
+            cube_array_popu += phii[i] * phii[j] * tdm_popu[i,j]
+            cube_array_cohe += phii[i] * phii[j] * tdm_cohe[i,j]
 
     final_popu = np.sum(cube_array_popu) * (dx*dy*dz)
     final_cohe = np.sum(cube_array_cohe) * (dx*dy*dz)
+    final_popu_core = np.sum(cube_array_popu_core) * (dx*dy*dz)
+    final_cohe_core = np.sum(cube_array_cohe_core) * (dx*dy*dz)
+    final_popu_inactive = np.sum(cube_array_popu_inactive) * (dx*dy*dz)
+    final_cohe_inactive = np.sum(cube_array_cohe_inactive) * (dx*dy*dz)
+    final_popu_active = np.sum(cube_array_popu_active) * (dx*dy*dz)
+    final_cohe_active = np.sum(cube_array_cohe_active) * (dx*dy*dz)
 
-    return final_popu, final_cohe
+    return final_popu, final_cohe, final_popu_core, final_cohe_core, final_popu_inactive, final_cohe_inactive, final_popu_active, final_cohe_active
 
 
 
@@ -966,9 +988,6 @@ def Main():
         file_pickle = data['first_second']
         file_list_index = pickle.load(open(file_pickle,'rb'))
 
-        if data['take_core_out']:
-            print("\nI will take into account only ACTIVE SPACE\n")
-
         if 'one_every' in data:
             one_every = data['one_every']
         else:
@@ -1033,8 +1052,15 @@ def Main():
 
                         final_sum_popu = sum([ x[0] for x in a_data ])
                         final_sum_cohe = sum([ x[1] for x in a_data ])
+                        final_sum_popu_core = sum([ x[2] for x in a_data ])
+                        final_sum_cohe_core = sum([ x[3] for x in a_data ])
+                        final_sum_popu_inactive = sum([ x[4] for x in a_data ])
+                        final_sum_cohe_inactive = sum([ x[5] for x in a_data ])
+                        final_sum_popu_active = sum([ x[6] for x in a_data ])
+                        final_sum_cohe_active = sum([ x[7] for x in a_data ])
+
                         with open(fn,'a') as filZ:
-                            filZ.write('{} {:15.12f} {:15.12f}\n'.format(time_string,final_sum_popu, final_sum_cohe))
+                            filZ.write('{} {:15.12f} {:15.12f} {:15.12f} {:15.12f} {:15.12f} {:15.12f} {:15.12f} {:15.12f}\n'.format(time_string,final_sum_popu, final_sum_cohe, final_sum_popu_core, final_sum_cohe_core, final_sum_popu_inactive, final_sum_cohe_inactive, final_sum_popu_active, final_sum_cohe_active))
 
     if args.i != None:
         # activate folder mode
