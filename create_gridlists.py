@@ -61,13 +61,13 @@ def points_in_nonoverlapping_cylinder(geom, r, q, kind):
     if kind == 'blue':
         boolean4 = np.dot(q,direction1) > 0
         boolean5 = np.dot(q,direction2) < 0
-        pt1 = pt5
-        pt2 = pt3
+        pt1 = pt5 # shame on you Alessio
+        pt2 = pt3 # shame on you Alessio
     elif kind == 'red':
         boolean4 = np.dot(q,direction1) > 0
         boolean5 = np.dot(q,direction2) > 0
-        pt1 = pt5
-        pt2 = pt2
+        pt1 = pt5 # shame on you Alessio
+        pt2 = pt2 # shame on you Alessio
     else:
         sys.err('what?')
 
