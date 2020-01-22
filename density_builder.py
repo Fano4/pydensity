@@ -227,7 +227,8 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
     n_mo, nes, n_core = 31, 8, 23
     tdm_file = h5.File(os.path.splitext(molcas_h5file_path)[0] + '.TDM.h5', 'r')
     tran_den_mat = tdm_file['TDM']
-    tdm = np.zeros((n_mo,n_mo))
+    tdm_popu = np.zeros((n_mo,n_mo))
+    tdm_cohe = np.zeros((n_mo,n_mo))
 
     # u wanna take out S0?
     if no_s0:
@@ -236,10 +237,10 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
         begin_here = 0
 
     for ies in np.arange(begin_here,nes):
-        tdm = tdm+abs(wvpck_data[ies])**2*tran_den_mat[(ies)*nes+(ies)].reshape((n_mo,n_mo))
+        tdm_popu = tdm_popu+abs(wvpck_data[ies])**2*tran_den_mat[(ies)*nes+(ies)].reshape((n_mo,n_mo))
         for jes in np.arange(ies+1,nes):
             #print(ies,jes,"are the es")
-            tdm = tdm+2*((wvpck_data[ies]*wvpck_data[jes].conjugate()).real)*tran_den_mat[(ies)*nes+(jes)].reshape((n_mo,n_mo))
+            tdm_cohe = tdm_cohe+2*((wvpck_data[ies]*wvpck_data[jes].conjugate()).real)*tran_den_mat[(ies)*nes+(jes)].reshape((n_mo,n_mo))
 
     xmin, ymin, zmin = data['mins']
     nx,ny,nz = data['num_points']
@@ -265,23 +266,27 @@ def calculate_between_carbons(wvpck_data,molcas_h5file_path,indexes,data):
         # the mo method calculates the MO given space orbitals
         phii[i,:] = orbital_object.mo(i,first[indexes],second[indexes],third[indexes])
 
-    cube_array = np.zeros(number_of_points)
+    cube_array_popu = np.zeros(number_of_points)
+    cube_array_cohe = np.zeros(number_of_points)
 
     if data['take_core_out']:
 
         for i in range(n_core,n_mo):
             for j in range(n_core,n_mo):
-                cube_array += phii[i] * phii[j] * tdm[i,j]
+                cube_array_popu += phii[i] * phii[j] * tdm_popu[i,j]
+                cube_array_cohe += phii[i] * phii[j] * tdm_cohe[i,j]
 
     else:
 
         for i in range(n_mo):
             for j in range(n_mo):
-                cube_array += phii[i] * phii[j] * tdm[i,j]
+                cube_array_popu += phii[i] * phii[j] * tdm_popu[i,j]
+                cube_array_cohe += phii[i] * phii[j] * tdm_cohe[i,j]
 
-    final = np.sum(cube_array) * (dx*dy*dz)
+    final_popu = np.sum(cube_array_popu) * (dx*dy*dz)
+    final_cohe = np.sum(cube_array_cohe) * (dx*dy*dz)
 
-    return final
+    return final_popu, final_cohe
 
 
 
@@ -993,7 +998,9 @@ def Main():
 
 
                 for lab in file_list_index:
-                    fn = os.path.join(wf_folder,lab + '.dat')
+                    # I wanna give a name where the h5 are now, so I can parallelize this
+                    wf_name = os.path.splitext(os.path.basename(single_file_wf))[0]
+                    fn = os.path.join(wf_folder, '{}_{}.dat'.format(wf_name, lab))
                     time_string = '{:6.3f}'.format(time)
                     is_there = False
                     if os.path.exists(fn):
@@ -1024,9 +1031,10 @@ def Main():
                         #      print(single_wf, single_file, single_indexes)
                         #      calculate_between_carbons(single_wf, single_file, single_indexes, data)
 
-                        final_sum = sum(a_data)
+                        final_sum_popu = sum([ x[0] for x in a_data ])
+                        final_sum_cohe = sum([ x[1] for x in a_data ])
                         with open(fn,'a') as filZ:
-                            filZ.write('{} {:7.4f}\n'.format(time_string,final_sum))
+                            filZ.write('{} {:15.12f} {:15.12f}\n'.format(time_string,final_sum_popu, final_sum_cohe))
 
     if args.i != None:
         # activate folder mode
