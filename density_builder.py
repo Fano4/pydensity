@@ -1060,7 +1060,7 @@ def Main():
                         final_sum_cohe_active = sum([ x[7] for x in a_data ])
 
                         with open(fn,'a') as filZ:
-                            filZ.write('{} {:15.12f} {:15.12f} {:15.12f} {:15.12f} {:15.12f} {:15.12f} {:15.12f} {:15.12f}\n'.format(time_string,final_sum_popu, final_sum_cohe, final_sum_popu_core, final_sum_cohe_core, final_sum_popu_inactive, final_sum_cohe_inactive, final_sum_popu_active, final_sum_cohe_active))
+                            filZ.write('{},{},{},{},{},{},{},{},{}\n'.format(time_string,final_sum_popu, final_sum_cohe, final_sum_popu_core, final_sum_cohe_core, final_sum_popu_inactive, final_sum_cohe_inactive, final_sum_popu_active, final_sum_cohe_active))
 
     if args.i != None:
         # activate folder mode
