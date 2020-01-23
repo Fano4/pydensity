@@ -1019,7 +1019,7 @@ def Main():
                 for lab in file_list_index:
                     # I wanna give a name where the h5 are now, so I can parallelize this
                     wf_name = os.path.splitext(os.path.basename(single_file_wf))[0]
-                    fn = os.path.join(wf_folder, '{}_{}.dat'.format(wf_name, lab))
+                    fn = os.path.join(wf_folder, '{}_{}.csv'.format(wf_name, lab))
                     time_string = '{:6.3f}'.format(time)
                     is_there = False
                     if os.path.exists(fn):
