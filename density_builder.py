@@ -1023,12 +1023,13 @@ def Main():
                     time_string = '{:6.3f}'.format(time)
                     is_there = False
                     if os.path.exists(fn):
+                        # I changed this because now I create a separate file for each WF
                         print('{} exists...'.format(fn))
-                        with open(fn,'r') as f:
-                            for line in f.readlines():
-                                # this shit below does not work
-                                if abs(time - float(line.split(',')[0])) < 0.00001:
-                                    is_there = True
+                        #with open(fn,'r') as f:
+                        #    for line in f.readlines():
+                        #        # this shit below does not work
+                        #        if abs(time - float(line.split(',')[0])) < 0.00001:
+                        is_there = True
                     if is_there:
                         print('It seems like {} is already calculated'.format(time_string))
                     else:
