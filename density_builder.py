@@ -1027,7 +1027,7 @@ def Main():
                         with open(fn,'r') as f:
                             for line in f.readlines():
                                 # this shit below does not work
-                                if abs(time - float(line.split()[0])) < 0.00001:
+                                if abs(time - float(line.split(',')[0])) < 0.00001:
                                     is_there = True
                     if is_there:
                         print('It seems like {} is already calculated'.format(time_string))
